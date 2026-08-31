@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="MemoryAllocator/MemoryAllocator.vcxproj" Id="c0e63797-c37a-4fc6-b01e-ffcce2590855" />
+</Solution>
