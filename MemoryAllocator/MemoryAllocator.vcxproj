@@ -141,7 +141,11 @@
     </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Src\main.cpp" />
+    <ClCompile Include="Src\allocator.cpp" />
+    <ClCompile Include="Test\main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Include\allocator.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
