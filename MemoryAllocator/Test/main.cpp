@@ -5,23 +5,19 @@
 #define print(x) std::cout << x << "\n";
 
 int main(int argc, char** argv[]) {
-	Allocator allocator(1024 * StandardMemoryUnits::MB);
-	int intCount = (1024 * StandardMemoryUnits::MB) / sizeof(int);
 
-	for (int i = { 0 }; i < intCount; i++) {
-		int* x = (int*)allocator.Allocate(sizeof(int));
-		*x = 12345;
+	Allocator allocator(sizeof(int));
+	int* intOne = (int*) allocator.Allocate(sizeof(int));
+	*intOne = 10;
+	print("Int One: " << *intOne);
+	print("Int One Addr: " << intOne);
+	allocator.Free((void*)(intOne));
 
-		if (i % (intCount/10) == 0) {
-			print("==================================");
-			print("Intergers Allocated: " << i + 1);
-			print("Memory Free(MB): " << (allocator.GetFreeBytes() / StandardMemoryUnits::MB));
-			print("Memory Used(MB): " << (allocator.GetOccupiedBytes() / StandardMemoryUnits::MB));
-			print("===============XXX=================")
-		}
-	}
-
-	print("Total Integers Created: " << intCount);
+	int* intTwo = (int*) allocator.Allocate(sizeof(int));
+	*intTwo = 20;
+	print("Int Two: " << *intTwo);
+	print("Int Two Addr: " << intTwo);
+	allocator.Free((void*)(intTwo));
 
 	for (;;) {};
 	return EXIT_SUCCESS;

@@ -7,6 +7,12 @@ namespace StandardMemoryUnits {
 	constexpr size_t MB = KB * 1024;
 }
 
+struct BlockHeader {
+	SIZE_T size;
+	bool free;
+	BlockHeader* next;
+};
+
 class Allocator
 {
 public:
@@ -14,13 +20,12 @@ public:
 	~Allocator();
 
 	void* Allocate(SIZE_T bytes);
-	SIZE_T GetOccupiedBytes();
-	SIZE_T GetFreeBytes();
+	void Free(void* memory);
 
 private:
 	SIZE_T mBytes;
 	void* memory;
 	uint8_t* mBase; // uint for pointer arithetic (i.e moving n bytes ahead)
 	SIZE_T mCapacity;
-	SIZE_T mOffset;
+	BlockHeader* mFirstBlock;
 };
