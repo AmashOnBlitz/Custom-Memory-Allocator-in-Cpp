@@ -5,7 +5,8 @@
 #define MSG_PREFIX "[Allocator]"
 #define BUILD_RUNTIME_ERR_MSG(err) MSG_PREFIX + std::string("Error:") + std::string(err)
 
-Allocator::Allocator(SIZE_T arenaSize) :
+template<CoalesceAlgorithm CoalesceAlgo>
+Allocator<CoalesceAlgo>::Allocator(SIZE_T arenaSize) :
 	mMemoryArena(nullptr),
 	mArenaCapacity(arenaSize),
 	mHeadMemBlock(nullptr)
@@ -26,8 +27,8 @@ Allocator::Allocator(SIZE_T arenaSize) :
 	mBase = static_cast<UINT8*>(mMemoryArena);
 }
 
-
-Allocator::~Allocator()
+template<CoalesceAlgorithm CoalesceAlgo>
+Allocator<CoalesceAlgo>::~Allocator()
 {
 	if (mMemoryArena) {
 		::VirtualFree(
@@ -40,26 +41,29 @@ Allocator::~Allocator()
 	}
 }
 
-void* Allocator::Allocate(SIZE_T requiredSize)
+template<CoalesceAlgorithm CoalesceAlgo>
+void* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 {
 	if (requiredSize == 0)
 		throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Cannot Allocate 0 bytes"));
 
-	if (mArenaCapacity < sizeof(BlockHeader) ||  requiredSize > (mArenaCapacity - sizeof(BlockHeader)))
+	if (mArenaCapacity < sizeof(RoutedBlockHeader) ||  requiredSize > (mArenaCapacity - sizeof(RoutedBlockHeader)))
 		throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Arena to small to allocate"));
 
 	if (!mHeadMemBlock) {
-		mHeadMemBlock = reinterpret_cast<BlockHeader*>(mBase);
+		mHeadMemBlock = reinterpret_cast<RoutedBlockHeader*>(mBase);
 		mHeadMemBlock->size = requiredSize;
 		mHeadMemBlock->free = false;
 		mHeadMemBlock->next = nullptr;
+		if constexpr (CoalesceAlgo == CoalesceAlgorithm::LinkedPrevious)
+			mHeadMemBlock->prev = nullptr;
 		return reinterpret_cast<void*>(mHeadMemBlock + 1);
 	}
 
-	BlockHeader* previousBlock = mHeadMemBlock;
-	BlockHeader* currentBlock = mHeadMemBlock;
+	RoutedBlockHeader* previousBlock = mHeadMemBlock;
+	RoutedBlockHeader* currentBlock = mHeadMemBlock;
 
-	std::pair<BlockHeader*, SIZE_T> bestBlock = { nullptr, 0 };
+	std::pair<RoutedBlockHeader*, SIZE_T> bestBlock = { nullptr, 0 };
 
 	while (currentBlock) {
 		if (currentBlock->free && currentBlock->size >= requiredSize) {
@@ -79,25 +83,34 @@ void* Allocator::Allocate(SIZE_T requiredSize)
 
 	if (bestBlock.first) {
 		SIZE_T remaining = bestBlock.first->size - requiredSize;
-		if (remaining >= sizeof(BlockHeader) + 1) {
+		if (remaining >= sizeof(RoutedBlockHeader) + 1) {
+			RoutedBlockHeader* oldNext = bestBlock.first->next;
 			bestBlock.first->size = requiredSize;
 			UINT8* newBlockArea = reinterpret_cast<UINT8*>(bestBlock.first + 1) + bestBlock.first->size;
-			BlockHeader* newBlock = reinterpret_cast<BlockHeader*>(newBlockArea);
+			RoutedBlockHeader* newBlock = reinterpret_cast<RoutedBlockHeader*>(newBlockArea);
 			newBlock->free = true;
-			newBlock->size = remaining - sizeof(BlockHeader);
+			newBlock->size = remaining - sizeof(RoutedBlockHeader);
 			newBlock->next = bestBlock.first->next;
+			if constexpr (CoalesceAlgo == CoalesceAlgorithm::LinkedPrevious) {
+				newBlock->prev = bestBlock.first;
+				if (oldNext)
+					oldNext->prev = newBlock;
+			}
 			bestBlock.first->next = newBlock;
 		}
+
 		bestBlock.first->free = false;
 		return reinterpret_cast<void*>(bestBlock.first + 1);
 	}
 
 	UINT8* newBlockArea = reinterpret_cast<UINT8*>(previousBlock + 1) + previousBlock->size;
-	if ((newBlockArea + sizeof(BlockHeader) + requiredSize) <= mBase + mArenaCapacity) {
-		BlockHeader* newBlock = reinterpret_cast<BlockHeader*>(newBlockArea);
+	if ((newBlockArea + sizeof(RoutedBlockHeader) + requiredSize) <= mBase + mArenaCapacity) {
+		RoutedBlockHeader* newBlock = reinterpret_cast<RoutedBlockHeader*>(newBlockArea);
 		newBlock->free = false;
 		newBlock->next = nullptr;
 		newBlock->size = requiredSize;
+		if constexpr (CoalesceAlgo == CoalesceAlgorithm::LinkedPrevious)
+			newBlock->prev = previousBlock;
 		previousBlock->next = newBlock;
 		return reinterpret_cast<void*>(newBlock + 1);
 	}
@@ -107,26 +120,31 @@ void* Allocator::Allocate(SIZE_T requiredSize)
 	);
 }
 
-void Allocator::Deallocate(void* memory)
+template<CoalesceAlgorithm CoalesceAlgo>
+void Allocator<CoalesceAlgo>::Deallocate(void* memory)
 {
 	if (!memory)
 		throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Cannot Deallocate/Free nullptr"));
 
-	BlockHeader* block = reinterpret_cast<BlockHeader*>(memory) - 1;
+	RoutedBlockHeader* block = reinterpret_cast<RoutedBlockHeader*>(memory) - 1;
 	block->free = true;
+
+
 }
 
-void Allocator::Free(void* memory) {
+template<CoalesceAlgorithm CoalesceAlgo>
+void Allocator<CoalesceAlgo>::Free(void* memory) {
 	Deallocate(memory);
 }
 
-std::string Allocator::DebugBlocks()
+template<CoalesceAlgorithm CoalesceAlgo>
+std::string Allocator<CoalesceAlgo>::DebugBlocks()
 {
 	std::string debugStr = "";
 	if (!mHeadMemBlock) return debugStr;
 	if (mHeadMemBlock->size == 0) return debugStr;
 
-	BlockHeader* currentBlock = mHeadMemBlock;
+	RoutedBlockHeader* currentBlock = mHeadMemBlock;
 	while (currentBlock) {
 		debugStr += "[Block]==============================\n";
 		debugStr += "Address: ";
@@ -146,3 +164,4 @@ std::string Allocator::DebugBlocks()
 
 	return debugStr;
 }
+

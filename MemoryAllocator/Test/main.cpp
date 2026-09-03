@@ -6,7 +6,7 @@
 
 int main(int argc, char** argv[]) {
 
-	Allocator allocator(StandardMemoryUnits::KB);
+	Allocator<CoalesceAlgorithm::LinkPrevious> allocator(StandardMemoryUnits::KB);
 
     int* a = (int*)allocator.Allocate(sizeof(int));
     double* b = (double*)allocator.Allocate(64);
