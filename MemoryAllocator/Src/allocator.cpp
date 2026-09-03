@@ -71,14 +71,25 @@ void* Allocator::Allocate(SIZE_T requiredSize)
 	}
 
 	if (suitableBlocks.size() != 0) {
-		std::pair<BlockHeader*, SIZE_T> BestBlock = suitableBlocks[0];
-		for (const auto& Block : suitableBlocks) {
-			if (Block.second < BestBlock.second) {
-				BestBlock = Block;
+		std::pair<BlockHeader*, SIZE_T> bestBlock = suitableBlocks[0];
+		for (const auto& block : suitableBlocks) {
+			if (block.second < bestBlock.second) {
+				bestBlock = block;
 			}
 		}
-		BestBlock.first->free = false;
-		return reinterpret_cast<void*>(BestBlock.first + 1);
+
+		SIZE_T remaining = bestBlock.first->size - requiredSize;
+		if (remaining >= sizeof(BlockHeader) + 1) {
+			bestBlock.first->size = requiredSize;
+			UINT8* newBlockArea = reinterpret_cast<UINT8*>(bestBlock.first + 1) + bestBlock.first->size;
+			BlockHeader* newBlock = reinterpret_cast<BlockHeader*>(newBlockArea);
+			newBlock->free = true;
+			newBlock->size = remaining - sizeof(BlockHeader);
+			newBlock->next = bestBlock.first->next;
+			bestBlock.first->next = newBlock;
+		}
+		bestBlock.first->free = false;
+		return reinterpret_cast<void*>(bestBlock.first + 1);
 	}
 
 	UINT8* newBlockArea = reinterpret_cast<UINT8*>(previousBlock + 1) + previousBlock->size;
