@@ -2,6 +2,8 @@
 #include <Windows.h>
 #include <cstdint>
 #include <string>
+#include <vector>
+#include <utility>
 
 namespace StandardMemoryUnits {
 	constexpr size_t KB = 1024;

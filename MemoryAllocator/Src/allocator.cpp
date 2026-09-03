@@ -59,13 +59,26 @@ void* Allocator::Allocate(SIZE_T requiredSize)
 	BlockHeader* previousBlock = mHeadMemBlock;
 	BlockHeader* currentBlock = mHeadMemBlock;
 
+	std::vector<std::pair<BlockHeader*, SIZE_T>> suitableBlocks;
+
 	while (currentBlock) {
 		if (currentBlock->free && currentBlock->size >= requiredSize) {
-			currentBlock->free = false;
-			return reinterpret_cast<void*>(currentBlock + 1);
+			SIZE_T sizeExceed = currentBlock->size - requiredSize;
+			suitableBlocks.push_back({ currentBlock,sizeExceed });
 		}
 		previousBlock = currentBlock;
 		currentBlock = currentBlock->next;
+	}
+
+	if (suitableBlocks.size() != 0) {
+		std::pair<BlockHeader*, SIZE_T> BestBlock = suitableBlocks[0];
+		for (const auto& Block : suitableBlocks) {
+			if (Block.second < BestBlock.second) {
+				BestBlock = Block;
+			}
+		}
+		BestBlock.first->free = false;
+		return reinterpret_cast<void*>(BestBlock.first + 1);
 	}
 
 	UINT8* newBlockArea = reinterpret_cast<UINT8*>(previousBlock + 1) + previousBlock->size;
