@@ -9,7 +9,7 @@ int main(int argc, char** argv[]) {
 	Allocator allocator(StandardMemoryUnits::KB);
 
     int* a = (int*)allocator.Allocate(sizeof(int));
-    int* b = (int*)allocator.Allocate(sizeof(int));
+    double* b = (double*)allocator.Allocate(64);
     int* c = (int*)allocator.Allocate(sizeof(int));
     *a = 10;
     *b = 20;

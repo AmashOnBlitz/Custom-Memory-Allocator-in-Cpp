@@ -45,7 +45,7 @@ void* Allocator::Allocate(SIZE_T requiredSize)
 	if (requiredSize == 0)
 		throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Cannot Allocate 0 bytes"));
 
-	if (requiredSize > (mArenaCapacity - sizeof(BlockHeader)))
+	if (mArenaCapacity < sizeof(BlockHeader) ||  requiredSize > (mArenaCapacity - sizeof(BlockHeader)))
 		throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Arena to small to allocate"));
 
 	if (!mHeadMemBlock) {
@@ -59,25 +59,25 @@ void* Allocator::Allocate(SIZE_T requiredSize)
 	BlockHeader* previousBlock = mHeadMemBlock;
 	BlockHeader* currentBlock = mHeadMemBlock;
 
-	std::vector<std::pair<BlockHeader*, SIZE_T>> suitableBlocks;
+	std::pair<BlockHeader*, SIZE_T> bestBlock = { nullptr, 0 };
 
 	while (currentBlock) {
 		if (currentBlock->free && currentBlock->size >= requiredSize) {
 			SIZE_T sizeExceed = currentBlock->size - requiredSize;
-			suitableBlocks.push_back({ currentBlock,sizeExceed });
+			if (bestBlock.first == nullptr) {
+				bestBlock = { currentBlock, sizeExceed };
+			}
+			else {
+				if (sizeExceed < bestBlock.second) {
+					bestBlock = { currentBlock, sizeExceed };
+				}
+			}
 		}
 		previousBlock = currentBlock;
 		currentBlock = currentBlock->next;
 	}
 
-	if (suitableBlocks.size() != 0) {
-		std::pair<BlockHeader*, SIZE_T> bestBlock = suitableBlocks[0];
-		for (const auto& block : suitableBlocks) {
-			if (block.second < bestBlock.second) {
-				bestBlock = block;
-			}
-		}
-
+	if (bestBlock.first) {
 		SIZE_T remaining = bestBlock.first->size - requiredSize;
 		if (remaining >= sizeof(BlockHeader) + 1) {
 			bestBlock.first->size = requiredSize;
