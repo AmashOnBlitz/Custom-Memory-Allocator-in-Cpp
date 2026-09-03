@@ -49,7 +49,7 @@ struct BlockHeader<CoalesceAlgorithm::LinkPrevious> {
 template<CoalesceAlgorithm CoalesceAlgo>
 class Allocator
 {
-	using RoutedBlockHeader = BlockHeaderBase<CoalesceAlgo>;
+	using RoutedBlockHeader = BlockHeader<CoalesceAlgo>;
 
 public:
 	Allocator(SIZE_T arenaSize);

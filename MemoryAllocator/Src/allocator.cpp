@@ -55,7 +55,7 @@ void* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 		mHeadMemBlock->size = requiredSize;
 		mHeadMemBlock->free = false;
 		mHeadMemBlock->next = nullptr;
-		if constexpr (CoalesceAlgo == CoalesceAlgorithm::LinkedPrevious)
+		if constexpr (CoalesceAlgo == CoalesceAlgorithm::LinkPrevious)
 			mHeadMemBlock->prev = nullptr;
 		return reinterpret_cast<void*>(mHeadMemBlock + 1);
 	}
@@ -91,7 +91,7 @@ void* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 			newBlock->free = true;
 			newBlock->size = remaining - sizeof(RoutedBlockHeader);
 			newBlock->next = bestBlock.first->next;
-			if constexpr (CoalesceAlgo == CoalesceAlgorithm::LinkedPrevious) {
+			if constexpr (CoalesceAlgo == CoalesceAlgorithm::LinkPrevious) {
 				newBlock->prev = bestBlock.first;
 				if (oldNext)
 					oldNext->prev = newBlock;
@@ -109,7 +109,7 @@ void* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 		newBlock->free = false;
 		newBlock->next = nullptr;
 		newBlock->size = requiredSize;
-		if constexpr (CoalesceAlgo == CoalesceAlgorithm::LinkedPrevious)
+		if constexpr (CoalesceAlgo == CoalesceAlgorithm::LinkPrevious)
 			newBlock->prev = previousBlock;
 		previousBlock->next = newBlock;
 		return reinterpret_cast<void*>(newBlock + 1);
@@ -165,3 +165,6 @@ std::string Allocator<CoalesceAlgo>::DebugBlocks()
 	return debugStr;
 }
 
+
+template class Allocator<CoalesceAlgorithm::LinkPrevious>;
+template class Allocator<CoalesceAlgorithm::SearchFromHead>;
