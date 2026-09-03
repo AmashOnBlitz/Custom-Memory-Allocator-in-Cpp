@@ -5,69 +5,120 @@
 #define MSG_PREFIX "[Allocator]"
 #define BUILD_RUNTIME_ERR_MSG(err) MSG_PREFIX + std::string("Error:") + std::string(err)
 
-Allocator::Allocator(SIZE_T bytes) :
-	mBytes(bytes + sizeof(BlockHeader)),
-	memory(nullptr),
-	mBase(nullptr),
-	mCapacity(0),
-	mFirstBlock(nullptr)
+Allocator::Allocator(SIZE_T arenaSize) :
+	mMemoryArena(nullptr),
+	mArenaCapacity(arenaSize),
+	mHeadMemBlock(nullptr)
 {
-	if (bytes == 0)
-		throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Cannot Allocate 0 bytes"));
-	memory = ::VirtualAlloc(
+	if (mArenaCapacity == 0)
+		throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Cannot Reserve 0 bytes"));
+
+	mMemoryArena = ::VirtualAlloc(
 		nullptr,
-		mBytes,
+		mArenaCapacity,
 		MEM_COMMIT | MEM_RESERVE,
 		PAGE_READWRITE
 	);
-	if (!memory)
-		throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Cannot Allocate Memory, VirtualAlloc Failed!"));
 
-	mBase = static_cast<uint8_t*>(memory);
-	mCapacity = mBytes;
+	if (!mMemoryArena)
+		throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Cannot Reserve Memory, VirtualAlloc Failed!"));
 
-	mFirstBlock = reinterpret_cast<BlockHeader*>(mBase);
-	mFirstBlock->size = mBytes - sizeof(BlockHeader);  // usable space
-	mFirstBlock->free = true;
-	mFirstBlock->next = nullptr;
+	mBase = static_cast<UINT8*>(mMemoryArena);
 }
+
 
 Allocator::~Allocator()
 {
-	if (memory) {
-		VirtualFree(
-			memory,
+	if (mMemoryArena) {
+		::VirtualFree(
+			mMemoryArena,
 			0,
 			MEM_RELEASE
 		);
+		mMemoryArena = nullptr;
+		mBase = nullptr;
 	}
 }
 
-void* Allocator::Allocate(SIZE_T bytes)
+void* Allocator::Allocate(SIZE_T requiredSize)
 {
-	BlockHeader* current = mFirstBlock;
+	if (requiredSize == 0)
+		throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Cannot Allocate 0 bytes"));
 
-	while (current != nullptr) {
-		if (current->free && current->size >= bytes) {
-			current->free = false;
-			return reinterpret_cast<void*>(current + 1);
-			// first move one indice forward (one type (BlockHeader in this case, other possible types can be int, float
-			// etc) forward and make void point to that address (user memory area) 
-			// moved 1 indice forward so that pointer points to user mem area not header
-			// used reinterpret_cast as there is no relation b/w void and BlockHeader 
-			// it tells compiler just do it, we know what we are doing
+	if (requiredSize > (mArenaCapacity - sizeof(BlockHeader)))
+		throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Arena to small to allocate"));
+
+	if (!mHeadMemBlock) {
+		mHeadMemBlock = reinterpret_cast<BlockHeader*>(mBase);
+		mHeadMemBlock->size = requiredSize;
+		mHeadMemBlock->free = false;
+		mHeadMemBlock->next = nullptr;
+		return reinterpret_cast<void*>(mHeadMemBlock + 1);
+	}
+
+	BlockHeader* previousBlock = mHeadMemBlock;
+	BlockHeader* currentBlock = mHeadMemBlock;
+
+	while (currentBlock) {
+		if (currentBlock->free && currentBlock->size >= requiredSize) {
+			currentBlock->free = false;
+			return reinterpret_cast<void*>(currentBlock + 1);
 		}
-		current = current->next;
+		previousBlock = currentBlock;
+		currentBlock = currentBlock->next;
 	}
 
-	return nullptr;
+	UINT8* newBlockArea = reinterpret_cast<UINT8*>(previousBlock + 1) + previousBlock->size;
+	if ((newBlockArea + sizeof(BlockHeader) + requiredSize) <= mBase + mArenaCapacity) {
+		BlockHeader* newBlock = reinterpret_cast<BlockHeader*>(newBlockArea);
+		newBlock->free = false;
+		newBlock->next = nullptr;
+		newBlock->size = requiredSize;
+		previousBlock->next = newBlock;
+		return reinterpret_cast<void*>(newBlock + 1);
+	}
+
+	throw std::runtime_error(
+		BUILD_RUNTIME_ERR_MSG("Cannot Allocate A Free Block Or Create New One In This Arena!\nOut Of Memory In Arena")
+	);
 }
 
-void Allocator::Free(void* memory)
+void Allocator::Deallocate(void* memory)
 {
-	if (!memory) return;
-	BlockHeader* header = reinterpret_cast<BlockHeader*>(memory) - 1;
-	// make this header point to mem addr (i.e 0x100) and move 1 indice backward (1 blockheader backward) 
-	// to point at header of mem
-	header->free = true;
+	if (!memory)
+		throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Cannot Deallocate/Free nullptr"));
+
+	BlockHeader* block = reinterpret_cast<BlockHeader*>(memory) - 1;
+	block->free = true;
+}
+
+void Allocator::Free(void* memory) {
+	Deallocate(memory);
+}
+
+std::string Allocator::DebugBlocks()
+{
+	std::string debugStr = "";
+	if (!mHeadMemBlock) return debugStr;
+	if (mHeadMemBlock->size == 0) return debugStr;
+
+	BlockHeader* currentBlock = mHeadMemBlock;
+	while (currentBlock) {
+		debugStr += "[Block]==============================\n";
+		debugStr += "Address: ";
+		debugStr += std::to_string(reinterpret_cast<uintptr_t>(currentBlock));
+		debugStr += "\n";
+		debugStr += "User Data Address: ";
+		debugStr += std::to_string(reinterpret_cast<uintptr_t>(currentBlock + 1));
+		debugStr += "\n";
+		debugStr += "Size: ";
+		debugStr += std::to_string(currentBlock->size);
+		debugStr += " bytes\n";
+		debugStr += "Free: ";
+		debugStr += (currentBlock->free) ? "True\n" : "False\n";
+		debugStr += "=====================================\n";
+		currentBlock = currentBlock->next;
+	}
+
+	return debugStr;
 }

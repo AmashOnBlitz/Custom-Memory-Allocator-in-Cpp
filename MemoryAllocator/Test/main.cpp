@@ -6,18 +6,36 @@
 
 int main(int argc, char** argv[]) {
 
-	Allocator allocator(sizeof(int));
-	int* intOne = (int*) allocator.Allocate(sizeof(int));
-	*intOne = 10;
-	print("Int One: " << *intOne);
-	print("Int One Addr: " << intOne);
-	allocator.Free((void*)(intOne));
+	Allocator allocator(StandardMemoryUnits::KB);
 
-	int* intTwo = (int*) allocator.Allocate(sizeof(int));
-	*intTwo = 20;
-	print("Int Two: " << *intTwo);
-	print("Int Two Addr: " << intTwo);
-	allocator.Free((void*)(intTwo));
+    int* a = (int*)allocator.Allocate(sizeof(int));
+    int* b = (int*)allocator.Allocate(sizeof(int));
+    int* c = (int*)allocator.Allocate(sizeof(int));
+    *a = 10;
+    *b = 20;
+    *c = 30;
+
+    print("A value: " << *a);
+    print("A address: " << a);
+    print("B value: " << *b);
+    print("B address: " << b);
+    print("C value: " << *c);
+    print("C address: " << c);
+
+    print("\n--- BEFORE FREE ---");
+    print(allocator.DebugBlocks());
+    allocator.Free(b);
+
+    print("\n--- AFTER FREE(B) ---");
+    print(allocator.DebugBlocks());
+
+    int* d = (int*)allocator.Allocate(sizeof(int));
+    *d = 40;
+
+    print("\n--- AFTER ALLOCATING D ---");
+    print("D value: " << *d);
+    print("D address: " << d);
+    print(allocator.DebugBlocks());
 
 	for (;;) {};
 	return EXIT_SUCCESS;
