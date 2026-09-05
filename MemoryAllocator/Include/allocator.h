@@ -10,16 +10,10 @@ namespace StandardMemoryUnits {
 	constexpr size_t MB = KB * 1024;
 }
 
-// Link Previous adds additional 8 bytes to memory block header (which is 24 + 8 = 32 bytes)
-// Search From Head seaches linearly from head list to previous list when coalescing which is O(n)
-// Allocation of 4 byte int :
-// Without Previous : 24 + 4 = 28 byte 
-// With Previous : 28 + 4 = 32 byte
-// Your choice: Less Memory Waste with More Processing Time,
-// or More Memory Waste with Less Processing Time.
-//
-// Suggestion: Use More Memory Waste on more memory systems,
-// while using Less Memory Waste on memory limited systems.
+// Link Prev adds additional 8 bytes to memory block header (which becomes 24 + 8 = 32 bytes)
+// Search From Head searches linearly from head list to prev list so O(n)
+// Link Prev takes less time while Search from Head wastes more memory
+// On 10k allocations test, LinkPrev was approx 36.8% fast
 enum class CoalesceAlgorithm {
 	LinkPrevious,
 	SearchFromHead

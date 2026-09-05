@@ -68,13 +68,8 @@ void* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 	while (currentBlock) {
 		if (currentBlock->free && currentBlock->size >= requiredSize) {
 			SIZE_T sizeExceed = currentBlock->size - requiredSize;
-			if (bestBlock.first == nullptr) {
+			if (bestBlock.first == nullptr || sizeExceed < bestBlock.second) {
 				bestBlock = { currentBlock, sizeExceed };
-			}
-			else {
-				if (sizeExceed < bestBlock.second) {
-					bestBlock = { currentBlock, sizeExceed };
-				}
 			}
 		}
 		previousBlock = currentBlock;
@@ -129,7 +124,48 @@ void Allocator<CoalesceAlgo>::Deallocate(void* memory)
 	RoutedBlockHeader* block = reinterpret_cast<RoutedBlockHeader*>(memory) - 1;
 	block->free = true;
 
+	RoutedBlockHeader* nxt = block->next;
+	RoutedBlockHeader* prev = nullptr;
 
+	if constexpr (CoalesceAlgo == CoalesceAlgorithm::LinkPrevious) {
+		prev = block->prev;
+	}
+	else {
+		RoutedBlockHeader* iPrev = nullptr;
+		RoutedBlockHeader* current = mHeadMemBlock;
+		while (current) {
+			if (current == block) {
+				prev = iPrev;
+				break;
+			}
+			iPrev = current;
+			current = current->next;
+		}
+	}
+
+	RoutedBlockHeader* backCoalescedBlock = block;
+
+	if (prev && prev->free) {
+		prev->size += (block->size + sizeof(RoutedBlockHeader));
+		prev->next = block->next;
+		prev->free = true;
+		backCoalescedBlock = prev;
+		if constexpr (CoalesceAlgo == CoalesceAlgorithm::LinkPrevious) {
+			if (backCoalescedBlock->next)
+				backCoalescedBlock->next->prev = prev;
+		}
+	}
+
+	if (nxt && nxt->free) {
+		backCoalescedBlock->size += (nxt->size + sizeof(RoutedBlockHeader));
+		backCoalescedBlock->free = true;
+		backCoalescedBlock->next = nxt->next;
+		if constexpr (CoalesceAlgo == CoalesceAlgorithm::LinkPrevious) {
+			if (backCoalescedBlock->next)
+				backCoalescedBlock->next->prev = backCoalescedBlock;
+		}
+	}
+	
 }
 
 template<CoalesceAlgorithm CoalesceAlgo>

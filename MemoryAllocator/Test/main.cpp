@@ -6,78 +6,89 @@
 
 int main(int argc, char** argv)
 {
+	print("LinkedPrevious =========================\n");
 
-    print("LinkedPrevious ================== = \n");
+	Allocator<CoalesceAlgorithm::LinkPrevious> linkedAllocator(StandardMemoryUnits::KB);
 
-    Allocator<CoalesceAlgorithm::LinkPrevious> linkedAllocator(StandardMemoryUnits::KB);
+	int* a = (int*)linkedAllocator.Allocate(sizeof(int));
+	int* b = (int*)linkedAllocator.Allocate(sizeof(int));
+	int* c = (int*)linkedAllocator.Allocate(sizeof(int));
+	int* d = (int*)linkedAllocator.Allocate(sizeof(int));
+	*a = 10;
+	*b = 20;
+	*c = 30;
+	*d = 40;
 
-    int* a = (int*)linkedAllocator.Allocate(sizeof(int));
-    double* b = (double*)linkedAllocator.Allocate(64);
-    int* c = (int*)linkedAllocator.Allocate(sizeof(int));
+	print("A address: " << a);
+	print("B address: " << b);
+	print("C address: " << c);
+	print("D address: " << d);
 
-    *a = 10;
-    *b = 20;
-    *c = 30;
+	print("\n=== BEFORE FREE ===");
+	print(linkedAllocator.DebugBlocks());
+	linkedAllocator.Free(b);
 
-    print("A value: " << *a);
-    print("A address: " << a);
-    print("B value: " << *b);
-    print("B address: " << b);
-    print("C value: " << *c);
-    print("C address: " << c);
+	print("\n=== AFTER FREE(B) ===");
+	print(linkedAllocator.DebugBlocks());
+	linkedAllocator.Free(c);
 
-    print("\n--- LinkedPrevious BEFORE FREE ---");
-    print(linkedAllocator.DebugBlocks());
+	print("\n=== AFTER FREE(C) ===");
+	print(linkedAllocator.DebugBlocks());
+	linkedAllocator.Free(a);
 
-    linkedAllocator.Free(b);
+	print("\n=== AFTER FREE(A) ===");
+	print(linkedAllocator.DebugBlocks());
+	linkedAllocator.Free(d);
 
-    print("\n--- LinkedPrevious AFTER FREE(B) ---");
-    print(linkedAllocator.DebugBlocks());
+	print("\n=== AFTER FREE(D) ===");
+	print(linkedAllocator.DebugBlocks());
 
-    int* d = (int*)linkedAllocator.Allocate(sizeof(int));
-    *d = 40;
 
-    print("\n--- LinkedPrevious AFTER ALLOCATING D ---");
-    print("D value: " << *d);
-    print("D address: " << d);
-    print(linkedAllocator.DebugBlocks());
+	print("\nSearchFromHead =========================\n");
 
-    print("\nSearchFromHead =========================\n");
+	Allocator<CoalesceAlgorithm::SearchFromHead> searchAllocator(StandardMemoryUnits::KB);
+	int* w = (int*)searchAllocator.Allocate(sizeof(int));
+	int* x = (int*)searchAllocator.Allocate(sizeof(int));
+	int* y = (int*)searchAllocator.Allocate(sizeof(int));
+	int* z = (int*)searchAllocator.Allocate(sizeof(int));
+	*w = 100;
+	*x = 200;
+	*y = 300;
+	*z = 400;
 
-    Allocator<CoalesceAlgorithm::SearchFromHead> searchAllocator(StandardMemoryUnits::KB);
+	print("W address: " << w);
+	print("X address: " << x);
+	print("Y address: " << y);
+	print("Z address: " << z);
 
-    int* x = (int*)searchAllocator.Allocate(sizeof(int));
-    double* y = (double*)searchAllocator.Allocate(64);
-    int* z = (int*)searchAllocator.Allocate(sizeof(int));
+	print("\n=== BEFORE FREE ===");
+	print(searchAllocator.DebugBlocks());
+	searchAllocator.Free(x);
 
-    *x = 100;
-    *y = 200;
-    *z = 300;
+	print("\n=== AFTER FREE(X) ===");
+	print(searchAllocator.DebugBlocks());
+	searchAllocator.Free(y);
 
-    print("X value: " << *x);
-    print("X address: " << x);
-    print("Y value: " << *y);
-    print("Y address: " << y);
-    print("Z value: " << *z);
-    print("Z address: " << z);
+	print("\n=== AFTER FREE(Y) ===");
+	print(searchAllocator.DebugBlocks());
+	searchAllocator.Free(w);
 
-    print("\n--- SearchFromHead BEFORE FREE ---");
-    print(searchAllocator.DebugBlocks());
+	print("\n=== AFTER FREE(W) ===");
+	print(searchAllocator.DebugBlocks());
+	searchAllocator.Free(z);
 
-    searchAllocator.Free(y);
+	print("\n=== AFTER FREE(Z) ===");
+	print(searchAllocator.DebugBlocks());
 
-    print("\n--- SearchFromHead AFTER FREE(Y) ---");
-    print(searchAllocator.DebugBlocks());
+	print("\n=== ALLOCATE AFTER COALESCING ===");
 
-    int* w = (int*)searchAllocator.Allocate(sizeof(int));
-    *w = 400;
+	int* test = (int*)searchAllocator.Allocate(sizeof(int));
+	*test = 500;
+	print("Test value: " << *test);
+	print("Test address: " << test);
+	print(searchAllocator.DebugBlocks());
 
-    print("\n--- SearchFromHead AFTER ALLOCATING W ---");
-    print("W value: " << *w);
-    print("W address: " << w);
-    print(searchAllocator.DebugBlocks());
+	for (;;) {}
 
-    for (;;) {}
-
-    return EXIT_SUCCESS;
+	return EXIT_SUCCESS;
 }
