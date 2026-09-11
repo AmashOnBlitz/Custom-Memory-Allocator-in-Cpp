@@ -47,7 +47,7 @@ int main(int argc, char** argv)
 	print("\nSearchFromHead =========================\n");
 
 	Allocator<CoalesceAlgorithm::SearchFromHead> searchAllocator(StandardMemoryUnits::KB);
-	int* w = (int*)searchAllocator.Allocate(sizeof(int));
+	int* w = (int*)searchAllocator.Allocate<int>(sizeof(int));
 	int* x = (int*)searchAllocator.Allocate(sizeof(int));
 	int* y = (int*)searchAllocator.Allocate(sizeof(int));
 	int* z = (int*)searchAllocator.Allocate(sizeof(int));

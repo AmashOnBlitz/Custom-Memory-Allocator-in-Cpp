@@ -42,6 +42,7 @@ Allocator<CoalesceAlgo>::~Allocator()
 }
 
 template<CoalesceAlgorithm CoalesceAlgo>
+template<typename DataType>
 void* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 {
 	if (requiredSize == 0)
@@ -52,12 +53,24 @@ void* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 
 	if (!mHeadMemBlock) {
 		mHeadMemBlock = reinterpret_cast<RoutedBlockHeader*>(mBase);
-		mHeadMemBlock->size = requiredSize;
+
+		uintptr_t rawAddress = reinterpret_cast<uintptr_t>(mHeadMemBlock + 1);
+		uintptr_t addrSlot = rawAddress + sizeof(SIZE_T);
+		uintptr_t aligned = Align(addrSlot, alignof(DataType));
+		SIZE_T offset = static_cast<SIZE_T>(aligned - rawAddress);
+
+		if (mArenaCapacity - sizeof(RoutedBlockHeader) < requiredSize + offset)
+			throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Arena to small to allocate"));
+
+		mHeadMemBlock->size = requiredSize + offset;
 		mHeadMemBlock->free = false;
 		mHeadMemBlock->next = nullptr;
 		if constexpr (CoalesceAlgo == CoalesceAlgorithm::LinkPrevious)
 			mHeadMemBlock->prev = nullptr;
-		return reinterpret_cast<void*>(mHeadMemBlock + 1);
+		SIZE_T* slot = reinterpret_cast<SIZE_T*>(aligned -sizeof(SIZE_T));
+		*slot = offset;
+
+		return reinterpret_cast<void*>(aligned);
 	}
 
 	RoutedBlockHeader* previousBlock = mHeadMemBlock;
@@ -98,6 +111,7 @@ void* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 		return reinterpret_cast<void*>(bestBlock.first + 1);
 	}
 
+	UINT8* arenaEnd = mBase + mArenaCapacity;
 	UINT8* newBlockArea = reinterpret_cast<UINT8*>(previousBlock + 1) + previousBlock->size;
 	if ((newBlockArea + sizeof(RoutedBlockHeader) + requiredSize) <= mBase + mArenaCapacity) {
 		RoutedBlockHeader* newBlock = reinterpret_cast<RoutedBlockHeader*>(newBlockArea);
@@ -121,7 +135,12 @@ void Allocator<CoalesceAlgo>::Deallocate(void* memory)
 	if (!memory)
 		throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Cannot Deallocate/Free nullptr"));
 
-	RoutedBlockHeader* block = reinterpret_cast<RoutedBlockHeader*>(memory) - 1;
+	uintptr_t slotArea = reinterpret_cast<uintptr_t>(memory) - sizeof(SIZE_T);
+	SIZE_T* slot = reinterpret_cast<SIZE_T*>(slotArea);
+	uintptr_t memPtr = reinterpret_cast<uintptr_t>(memory) - *slot;
+	UINT8* beforeInternalFrag = reinterpret_cast<UINT8*>(memPtr);
+
+	RoutedBlockHeader* block = reinterpret_cast<RoutedBlockHeader*>(beforeInternalFrag) - 1;
 	block->free = true;
 
 	RoutedBlockHeader* nxt = block->next;
@@ -199,6 +218,12 @@ std::string Allocator<CoalesceAlgo>::DebugBlocks()
 	}
 
 	return debugStr;
+}
+
+template<CoalesceAlgorithm CoalesceAlgo>
+uintptr_t Allocator<CoalesceAlgo>::Align(uintptr_t rawAddr, uintptr_t alignment)
+{
+	return uintptr_t((rawAddr + alignment - 1) & ~(alignment - 1));
 }
 
 
