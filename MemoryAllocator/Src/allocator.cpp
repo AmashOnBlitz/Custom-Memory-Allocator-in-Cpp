@@ -76,19 +76,28 @@ void* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 	RoutedBlockHeader* previousBlock = mHeadMemBlock;
 	RoutedBlockHeader* currentBlock = mHeadMemBlock;
 
-	std::pair<RoutedBlockHeader*, SIZE_T> bestBlock = { nullptr, 0 };
+	std::tuple<RoutedBlockHeader*, SIZE_T, SIZE_T> bestBlock = { nullptr, 0 };
 
 	while (currentBlock) {
-		if (currentBlock->free && currentBlock->size >= requiredSize) {
-			SIZE_T sizeExceed = currentBlock->size - requiredSize;
+		SIZE_T usrDataSize = currentBlock->size - sizeof(SIZE_T);
+		if (currentBlock->free && usrDataSize >= requiredSize) {
+			uintptr_t rawAddress = reinterpret_cast<uintptr_t>(currentBlock + 1);
+			uintptr_t addrSlot = rawAddress + sizeof(SIZE_T);
+			uintptr_t aligned = Align(addrSlot, alignof(DataType));
+			SIZE_T offset = static_cast<SIZE_T>(aligned - rawAddress);
+			if ((aligned + requiredSize) > rawAddress + currentBlock->size)
+				continue;
+
+			SIZE_T sizeExceed = currentBlock->size - (offset + requiredSize);
 			if (bestBlock.first == nullptr || sizeExceed < bestBlock.second) {
-				bestBlock = { currentBlock, sizeExceed };
+				bestBlock = { currentBlock, sizeExceed, offset};
 			}
 		}
 		previousBlock = currentBlock;
 		currentBlock = currentBlock->next;
 	}
 
+	// to start from here ---- make coalescing respect new slot method
 	if (bestBlock.first) {
 		SIZE_T remaining = bestBlock.first->size - requiredSize;
 		if (remaining >= sizeof(RoutedBlockHeader) + 1) {
