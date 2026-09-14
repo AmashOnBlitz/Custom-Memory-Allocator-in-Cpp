@@ -21,7 +21,7 @@ enum class CoalesceAlgorithm {
 };
 
 /*
-Style Taken : BlockHeader.size = size of user mem (dont add header area)
+Style Taken : BlockHeader.size = size of user mem + slot area (dont add header area)
 			  and BlockHeader will point to start of the block , the start of header
 			  not user mem data;
 */

@@ -56,7 +56,7 @@ void* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 
 		uintptr_t rawAddress = reinterpret_cast<uintptr_t>(mHeadMemBlock + 1);
 		uintptr_t addrSlot = rawAddress + sizeof(SIZE_T);
-		uintptr_t aligned = Align(addrSlot, alignof(DataType));
+		uintptr_t aligned = Align(addrSlot, alignof(DataTypean));
 		SIZE_T offset = static_cast<SIZE_T>(aligned - rawAddress);
 
 		if (mArenaCapacity - sizeof(RoutedBlockHeader) < requiredSize + offset)
@@ -76,11 +76,11 @@ void* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 	RoutedBlockHeader* previousBlock = mHeadMemBlock;
 	RoutedBlockHeader* currentBlock = mHeadMemBlock;
 
-	std::tuple<RoutedBlockHeader*, SIZE_T, SIZE_T> bestBlock = { nullptr, 0 };
+	std::tuple<RoutedBlockHeader*, SIZE_T, SIZE_T> bestBlock = { nullptr, 0, 0 };
 
 	while (currentBlock) {
-		SIZE_T usrDataSize = currentBlock->size - sizeof(SIZE_T);
-		if (currentBlock->free && usrDataSize >= requiredSize) {
+		SIZE_T totalDataSize = currentBlock->size;
+		if (currentBlock->free && totalDataSize >= requiredSize) {
 			uintptr_t rawAddress = reinterpret_cast<uintptr_t>(currentBlock + 1);
 			uintptr_t addrSlot = rawAddress + sizeof(SIZE_T);
 			uintptr_t aligned = Align(addrSlot, alignof(DataType));
@@ -97,12 +97,13 @@ void* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 		currentBlock = currentBlock->next;
 	}
 
-	// to start from here ---- make coalescing respect new slot method
 	if (bestBlock.first) {
-		SIZE_T remaining = bestBlock.first->size - requiredSize;
+		SIZE_T originalSize = bestBlock.first->size;
+		SIZE_T usedSize = bestBlock.third + requiredSize;
+		SIZE_T remaining = originalSize - usedSize;
 		if (remaining >= sizeof(RoutedBlockHeader) + 1) {
 			RoutedBlockHeader* oldNext = bestBlock.first->next;
-			bestBlock.first->size = requiredSize;
+			bestBlock.first->size = usedSize;
 			UINT8* newBlockArea = reinterpret_cast<UINT8*>(bestBlock.first + 1) + bestBlock.first->size;
 			RoutedBlockHeader* newBlock = reinterpret_cast<RoutedBlockHeader*>(newBlockArea);
 			newBlock->free = true;
@@ -117,20 +118,47 @@ void* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 		}
 
 		bestBlock.first->free = false;
-		return reinterpret_cast<void*>(bestBlock.first + 1);
+
+		UINT8* rawAddress = reinterpret_cast<UINT8*>(bestBlock.first + 1);
+		UINT8* aligned = rawAddress + bestBlock.third;
+		*reinterpret_cast<SIZE_T*>(aligned - sizeof(SIZE_T)) = bestBlock.third;
+		return reinterpret_cast<void*>(aligned);
 	}
 
-	UINT8* arenaEnd = mBase + mArenaCapacity;
 	UINT8* newBlockArea = reinterpret_cast<UINT8*>(previousBlock + 1) + previousBlock->size;
-	if ((newBlockArea + sizeof(RoutedBlockHeader) + requiredSize) <= mBase + mArenaCapacity) {
+	UINT8* newBlockHeaderArea = newBlockArea + sizeof(RoutedBlockHeader);
+	uintptr_t ptrNewBlockArea = reinterpret_cast<uintptr_t>(newBlockHeaderArea);
+	uintptr_t ptrNewBlockArOffset = ptrNewBlockArea + sizeof(SIZE_T);
+	UINT8* alignedNewBlockArea = reinterpret_cast<UINT8*>(
+		Align(ptrNewBlockArOffset, alignof(DataType))
+		);
+
+	if ((newBlockHeaderArea + sizeof(SIZE_T) + requiredSize) <= mBase + mArenaCapacity) {
+
+		if ((alignedNewBlockArea + requiredSize) > mBase + mArenaCapacity) {
+			throw std::runtime_error(
+				BUILD_RUNTIME_ERR_MSG("Cannot Allocate A Free Block Or Create New One In This Arena!\nOut Of Memory In Arena")
+			);
+		}
+
 		RoutedBlockHeader* newBlock = reinterpret_cast<RoutedBlockHeader*>(newBlockArea);
 		newBlock->free = false;
 		newBlock->next = nullptr;
-		newBlock->size = requiredSize;
+
+		SIZE_T offset = static_cast<SIZE_T>(
+			reinterpret_cast<uintptr_t>(alignedNewBlockArea) -
+			reinterpret_cast<uintptr_t>(newBlockArea)
+			);
+		newBlock->size = requiredSize + offset;
+
 		if constexpr (CoalesceAlgo == CoalesceAlgorithm::LinkPrevious)
 			newBlock->prev = previousBlock;
+
 		previousBlock->next = newBlock;
-		return reinterpret_cast<void*>(newBlock + 1);
+		SIZE_T* slot = reinterpret_cast<SIZE_T*>(alignedNewBlockArea - sizeof(SIZE_T));
+		*slot = offset;
+
+		return reinterpret_cast<void*>(alignedNewBlockArea);
 	}
 
 	throw std::runtime_error(
