@@ -56,7 +56,7 @@ void* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 
 		uintptr_t rawAddress = reinterpret_cast<uintptr_t>(mHeadMemBlock + 1);
 		uintptr_t addrSlot = rawAddress + sizeof(SIZE_T);
-		uintptr_t aligned = Align(addrSlot, alignof(DataTypean));
+		uintptr_t aligned = Align(addrSlot, alignof(DataType));
 		SIZE_T offset = static_cast<SIZE_T>(aligned - rawAddress);
 
 		if (mArenaCapacity - sizeof(RoutedBlockHeader) < requiredSize + offset)
@@ -85,8 +85,11 @@ void* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 			uintptr_t addrSlot = rawAddress + sizeof(SIZE_T);
 			uintptr_t aligned = Align(addrSlot, alignof(DataType));
 			SIZE_T offset = static_cast<SIZE_T>(aligned - rawAddress);
-			if ((aligned + requiredSize) > rawAddress + currentBlock->size)
+			if ((aligned + requiredSize) > rawAddress + currentBlock->size) {
+				previousBlock = currentBlock;
+				currentBlock = currentBlock->next;
 				continue;
+			}
 
 			SIZE_T sizeExceed = currentBlock->size - (offset + requiredSize);
 			if (bestBlock.first == nullptr || sizeExceed < bestBlock.second) {
@@ -99,7 +102,7 @@ void* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 
 	if (bestBlock.first) {
 		SIZE_T originalSize = bestBlock.first->size;
-		SIZE_T usedSize = bestBlock.third + requiredSize;
+		SIZE_T usedSize = Align(bestBlock.third + requiredSize, alignof(RoutedBlockHeader));
 		SIZE_T remaining = originalSize - usedSize;
 		if (remaining >= sizeof(RoutedBlockHeader) + 1) {
 			RoutedBlockHeader* oldNext = bestBlock.first->next;
@@ -126,16 +129,15 @@ void* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 	}
 
 	UINT8* newBlockArea = reinterpret_cast<UINT8*>(previousBlock + 1) + previousBlock->size;
-	UINT8* newBlockHeaderArea = newBlockArea + sizeof(RoutedBlockHeader);
-	uintptr_t ptrNewBlockArea = reinterpret_cast<uintptr_t>(newBlockHeaderArea);
+	uintptr_t ptrNewBlockArea = reinterpret_cast<uintptr_t>(newBlockArea);
 	uintptr_t ptrNewBlockArOffset = ptrNewBlockArea + sizeof(SIZE_T);
 	UINT8* alignedNewBlockArea = reinterpret_cast<UINT8*>(
 		Align(ptrNewBlockArOffset, alignof(DataType))
 		);
+	UINT8* arenaEnd = reinterpret_cast<UINT8*>(mBase) + mArenaCapacity;
+	if ((alignedNewBlockArea + sizeof(SIZE_T) + requiredSize) <= arenaEnd) {
 
-	if ((newBlockHeaderArea + sizeof(SIZE_T) + requiredSize) <= mBase + mArenaCapacity) {
-
-		if ((alignedNewBlockArea + requiredSize) > mBase + mArenaCapacity) {
+		if ((alignedNewBlockArea + requiredSize) > arenaEnd) {
 			throw std::runtime_error(
 				BUILD_RUNTIME_ERR_MSG("Cannot Allocate A Free Block Or Create New One In This Arena!\nOut Of Memory In Arena")
 			);

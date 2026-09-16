@@ -10,10 +10,11 @@ int main(int argc, char** argv)
 
 	Allocator<CoalesceAlgorithm::LinkPrevious> linkedAllocator(StandardMemoryUnits::KB);
 
-	int* a = (int*)linkedAllocator.Allocate(sizeof(int));
-	int* b = (int*)linkedAllocator.Allocate(sizeof(int));
-	int* c = (int*)linkedAllocator.Allocate(sizeof(int));
-	int* d = (int*)linkedAllocator.Allocate(sizeof(int));
+	int* a = (int*)linkedAllocator.Allocate<int>(sizeof(int));
+	int* b = (int*)linkedAllocator.Allocate<int>(sizeof(int));
+	int* c = (int*)linkedAllocator.Allocate<int>(sizeof(int));
+	int* d = (int*)linkedAllocator.Allocate<int>(sizeof(int));
+
 	*a = 10;
 	*b = 20;
 	*c = 30;
@@ -26,18 +27,22 @@ int main(int argc, char** argv)
 
 	print("\n=== BEFORE FREE ===");
 	print(linkedAllocator.DebugBlocks());
+
 	linkedAllocator.Free(b);
 
 	print("\n=== AFTER FREE(B) ===");
 	print(linkedAllocator.DebugBlocks());
+
 	linkedAllocator.Free(c);
 
 	print("\n=== AFTER FREE(C) ===");
 	print(linkedAllocator.DebugBlocks());
+
 	linkedAllocator.Free(a);
 
 	print("\n=== AFTER FREE(A) ===");
 	print(linkedAllocator.DebugBlocks());
+
 	linkedAllocator.Free(d);
 
 	print("\n=== AFTER FREE(D) ===");
@@ -47,10 +52,12 @@ int main(int argc, char** argv)
 	print("\nSearchFromHead =========================\n");
 
 	Allocator<CoalesceAlgorithm::SearchFromHead> searchAllocator(StandardMemoryUnits::KB);
+
 	int* w = (int*)searchAllocator.Allocate<int>(sizeof(int));
-	int* x = (int*)searchAllocator.Allocate(sizeof(int));
-	int* y = (int*)searchAllocator.Allocate(sizeof(int));
-	int* z = (int*)searchAllocator.Allocate(sizeof(int));
+	int* x = (int*)searchAllocator.Allocate<int>(sizeof(int));
+	int* y = (int*)searchAllocator.Allocate<int>(sizeof(int));
+	int* z = (int*)searchAllocator.Allocate<int>(sizeof(int));
+
 	*w = 100;
 	*x = 200;
 	*y = 300;
@@ -63,18 +70,22 @@ int main(int argc, char** argv)
 
 	print("\n=== BEFORE FREE ===");
 	print(searchAllocator.DebugBlocks());
+
 	searchAllocator.Free(x);
 
 	print("\n=== AFTER FREE(X) ===");
 	print(searchAllocator.DebugBlocks());
+
 	searchAllocator.Free(y);
 
 	print("\n=== AFTER FREE(Y) ===");
 	print(searchAllocator.DebugBlocks());
+
 	searchAllocator.Free(w);
 
 	print("\n=== AFTER FREE(W) ===");
 	print(searchAllocator.DebugBlocks());
+
 	searchAllocator.Free(z);
 
 	print("\n=== AFTER FREE(Z) ===");
@@ -82,8 +93,9 @@ int main(int argc, char** argv)
 
 	print("\n=== ALLOCATE AFTER COALESCING ===");
 
-	int* test = (int*)searchAllocator.Allocate(sizeof(int));
+	int* test = (int*)searchAllocator.Allocate<int>(sizeof(int));
 	*test = 500;
+
 	print("Test value: " << *test);
 	print("Test address: " << test);
 	print(searchAllocator.DebugBlocks());
