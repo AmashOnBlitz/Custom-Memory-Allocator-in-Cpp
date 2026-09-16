@@ -11,20 +11,20 @@ int main(int argc, char** argv)
 	Allocator<CoalesceAlgorithm::LinkPrevious> allocator(StandardMemoryUnits::KB);
 
 	print("Initial:");
-	//print(allocator.DebugBlocks());
+	print(allocator.DebugBlocks());
 
 	print("Allocate A (int)");
-	int* a = (int*)allocator.Allocate<int>(sizeof(int));
+	int* a = allocator.Allocate<int>(sizeof(int));
 	*a = 10;
-	//print(allocator.DebugBlocks());
+	print(allocator.DebugBlocks());
 
 	print("Allocate B (int)");
-	int* b = (int*)allocator.Allocate<int>(sizeof(int));
+	int* b = allocator.Allocate<int>(sizeof(int));
 	*b = 20;
-	//print(allocator.DebugBlocks());
+	print(allocator.DebugBlocks());
 
 	print("Allocate C (double)");
-	double* c = (double*)allocator.Allocate<double>(sizeof(double));
+	double* c = allocator.Allocate<double>(sizeof(double));
 	*c = 30.5;
 	print(allocator.DebugBlocks());
 
@@ -37,7 +37,7 @@ int main(int argc, char** argv)
 	print(allocator.DebugBlocks());
 
 	print("Allocate D (int) -> should reuse coalesced block");
-	int* d = (int*)allocator.Allocate<int>(sizeof(int));
+	int* d = allocator.Allocate<int>(sizeof(int));
 	*d = 40;
 	print(allocator.DebugBlocks());
 
@@ -50,12 +50,12 @@ int main(int argc, char** argv)
 	print(allocator.DebugBlocks());
 
 	print("Allocate E (int)");
-	int* e = (int*)allocator.Allocate<int>(sizeof(int));
+	int* e = allocator.Allocate<int>(sizeof(int));
 	*e = 50;
 	print(allocator.DebugBlocks());
 
 	print("Allocate F (int)");
-	int* f = (int*)allocator.Allocate<int>(sizeof(int));
+	int* f = allocator.Allocate<int>(sizeof(int));
 	*f = 60;
 	print(allocator.DebugBlocks());
 

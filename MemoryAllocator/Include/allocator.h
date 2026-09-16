@@ -53,7 +53,7 @@ public:
 	~Allocator();
 
 	template<typename DataType>
-	void* Allocate(SIZE_T requiredSize);
+	DataType* Allocate(SIZE_T requiredSize);
 	void Deallocate(void* memory);
 	void Free(void* memory);
 	std::string DebugBlocks();

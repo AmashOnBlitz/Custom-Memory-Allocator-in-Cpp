@@ -5,16 +5,17 @@
 
 #define MSG_PREFIX "[Allocator]"
 #define BUILD_RUNTIME_ERR_MSG(err) MSG_PREFIX + std::string("Error:") + std::string(err)
+#define RETURN_CONSTRUCTED_MEMORY(DataType, voidMem) return (DataType*)(voidMem)
 
 template<CoalesceAlgorithm CoalesceAlgo>
 template<typename DataType>
-void* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
+DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 {
 	if (requiredSize == 0)
 		throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Cannot Allocate 0 bytes"));
 
 	if (mArenaCapacity < sizeof(RoutedBlockHeader) || requiredSize >(mArenaCapacity - sizeof(RoutedBlockHeader)))
-		throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Arena to small to allocate"));
+		throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Arena too small to allocate"));
 
 	if (!mHeadMemBlock) {
 		mHeadMemBlock = reinterpret_cast<RoutedBlockHeader*>(mBase);
@@ -35,7 +36,7 @@ void* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 		SIZE_T* slot = reinterpret_cast<SIZE_T*>(aligned - sizeof(SIZE_T));
 		*slot = offset;
 
-		return reinterpret_cast<void*>(aligned);
+		RETURN_CONSTRUCTED_MEMORY(DataType, reinterpret_cast<void*>(aligned));
 	}
 
 	RoutedBlockHeader* previousBlock = mHeadMemBlock;
@@ -90,7 +91,7 @@ void* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 		UINT8* rawAddress = reinterpret_cast<UINT8*>(std::get<0>(bestBlock) + 1);
 		UINT8* aligned = rawAddress + std::get<2>(bestBlock);
 		*reinterpret_cast<SIZE_T*>(aligned - sizeof(SIZE_T)) = std::get<2>(bestBlock);
-		return reinterpret_cast<void*>(aligned);
+		RETURN_CONSTRUCTED_MEMORY(DataType,reinterpret_cast<void*>(aligned));
 	}
 
 	UINT8* newBlockArea = reinterpret_cast<UINT8*>(previousBlock + 1) + previousBlock->size;
@@ -118,7 +119,7 @@ void* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 		SIZE_T* slot = reinterpret_cast<SIZE_T*>(alignedNewBlockArea - sizeof(SIZE_T));
 		*slot = offset;
 
-		return reinterpret_cast<void*>(alignedNewBlockArea);
+		RETURN_CONSTRUCTED_MEMORY(DataType, alignedNewBlockArea);
 	}
 
 	throw std::runtime_error(
