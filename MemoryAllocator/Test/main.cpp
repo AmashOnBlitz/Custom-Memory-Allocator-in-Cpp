@@ -6,101 +6,72 @@
 
 int main(int argc, char** argv)
 {
-	print("LinkedPrevious =========================\n");
+	print("LinkPrevious =========================\n");
 
-	Allocator<CoalesceAlgorithm::LinkPrevious> linkedAllocator(StandardMemoryUnits::KB);
+	Allocator<CoalesceAlgorithm::LinkPrevious> allocator(StandardMemoryUnits::KB);
 
-	int* a = (int*)linkedAllocator.Allocate<int>(sizeof(int));
-	int* b = (int*)linkedAllocator.Allocate<int>(sizeof(int));
-	int* c = (int*)linkedAllocator.Allocate<int>(sizeof(int));
-	int* d = (int*)linkedAllocator.Allocate<int>(sizeof(int));
+	print("Initial:");
+	print(allocator.DebugBlocks());
 
+	print("Allocate A (int)");
+	int* a = (int*)allocator.Allocate<int>(sizeof(int));
 	*a = 10;
+	print(allocator.DebugBlocks());
+
+	print("Allocate B (int)");
+	int* b = (int*)allocator.Allocate<int>(sizeof(int));
 	*b = 20;
-	*c = 30;
+	print(allocator.DebugBlocks());
+
+	print("Allocate C (double)");
+	double* c = (double*)allocator.Allocate<double>(sizeof(double));
+	*c = 30.5;
+	print(allocator.DebugBlocks());
+
+	print("Free B");
+	allocator.Free(b);
+	print(allocator.DebugBlocks());
+
+	print("Free A -> should coalesce A + B");
+	allocator.Free(a);
+	print(allocator.DebugBlocks());
+
+	print("Allocate D (int) -> should reuse coalesced block");
+	int* d = (int*)allocator.Allocate<int>(sizeof(int));
 	*d = 40;
+	print(allocator.DebugBlocks());
 
-	print("A address: " << a);
-	print("B address: " << b);
-	print("C address: " << c);
-	print("D address: " << d);
+	print("Free C");
+	allocator.Free(c);
+	print(allocator.DebugBlocks());
 
-	print("\n=== BEFORE FREE ===");
-	print(linkedAllocator.DebugBlocks());
+	print("Free D -> should coalesce everything");
+	allocator.Free(d);
+	print(allocator.DebugBlocks());
 
-	linkedAllocator.Free(b);
+	print("Allocate E (int)");
+	int* e = (int*)allocator.Allocate<int>(sizeof(int));
+	*e = 50;
+	print(allocator.DebugBlocks());
 
-	print("\n=== AFTER FREE(B) ===");
-	print(linkedAllocator.DebugBlocks());
+	print("Allocate F (int)");
+	int* f = (int*)allocator.Allocate<int>(sizeof(int));
+	*f = 60;
+	print(allocator.DebugBlocks());
 
-	linkedAllocator.Free(c);
+	print("Free E");
+	allocator.Free(e);
+	print(allocator.DebugBlocks());
 
-	print("\n=== AFTER FREE(C) ===");
-	print(linkedAllocator.DebugBlocks());
+	print("Free F -> should coalesce E + F");
+	allocator.Free(f);
+	print(allocator.DebugBlocks());
 
-	linkedAllocator.Free(a);
+	print("Values check:");
+	print(*e);
+	print(*f);
 
-	print("\n=== AFTER FREE(A) ===");
-	print(linkedAllocator.DebugBlocks());
+	print("========================================");
 
-	linkedAllocator.Free(d);
-
-	print("\n=== AFTER FREE(D) ===");
-	print(linkedAllocator.DebugBlocks());
-
-
-	print("\nSearchFromHead =========================\n");
-
-	Allocator<CoalesceAlgorithm::SearchFromHead> searchAllocator(StandardMemoryUnits::KB);
-
-	int* w = (int*)searchAllocator.Allocate<int>(sizeof(int));
-	int* x = (int*)searchAllocator.Allocate<int>(sizeof(int));
-	int* y = (int*)searchAllocator.Allocate<int>(sizeof(int));
-	int* z = (int*)searchAllocator.Allocate<int>(sizeof(int));
-
-	*w = 100;
-	*x = 200;
-	*y = 300;
-	*z = 400;
-
-	print("W address: " << w);
-	print("X address: " << x);
-	print("Y address: " << y);
-	print("Z address: " << z);
-
-	print("\n=== BEFORE FREE ===");
-	print(searchAllocator.DebugBlocks());
-
-	searchAllocator.Free(x);
-
-	print("\n=== AFTER FREE(X) ===");
-	print(searchAllocator.DebugBlocks());
-
-	searchAllocator.Free(y);
-
-	print("\n=== AFTER FREE(Y) ===");
-	print(searchAllocator.DebugBlocks());
-
-	searchAllocator.Free(w);
-
-	print("\n=== AFTER FREE(W) ===");
-	print(searchAllocator.DebugBlocks());
-
-	searchAllocator.Free(z);
-
-	print("\n=== AFTER FREE(Z) ===");
-	print(searchAllocator.DebugBlocks());
-
-	print("\n=== ALLOCATE AFTER COALESCING ===");
-
-	int* test = (int*)searchAllocator.Allocate<int>(sizeof(int));
-	*test = 500;
-
-	print("Test value: " << *test);
-	print("Test address: " << test);
-	print(searchAllocator.DebugBlocks());
-
-	for (;;) {}
-
-	return EXIT_SUCCESS;
+	return 0;
 }

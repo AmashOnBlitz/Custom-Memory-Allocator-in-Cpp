@@ -66,3 +66,5 @@ private:
 	SIZE_T mArenaCapacity;
 	RoutedBlockHeader* mHeadMemBlock;
 };
+
+#include "..\Src\TemplateAllocate.cpp"
