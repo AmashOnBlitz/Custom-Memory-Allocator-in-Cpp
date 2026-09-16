@@ -1,6 +1,7 @@
 #include "allocator.h"
 #include <stdexcept>
 #include <string>
+#include <iostream>
 
 #define MSG_PREFIX "[Allocator]"
 #define BUILD_RUNTIME_ERR_MSG(err) MSG_PREFIX + std::string("Error:") + std::string(err)
@@ -109,9 +110,9 @@ std::string Allocator<CoalesceAlgo>::DebugBlocks()
 {
 	std::string debugStr = "";
 	if (!mHeadMemBlock) return debugStr;
-	if (mHeadMemBlock->size == 0) return debugStr;
 
 	RoutedBlockHeader* currentBlock = mHeadMemBlock;
+
 	while (currentBlock) {
 		debugStr += "[Block]==============================\n";
 		debugStr += "Address: ";

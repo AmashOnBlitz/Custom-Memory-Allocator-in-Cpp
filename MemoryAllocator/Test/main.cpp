@@ -11,17 +11,17 @@ int main(int argc, char** argv)
 	Allocator<CoalesceAlgorithm::LinkPrevious> allocator(StandardMemoryUnits::KB);
 
 	print("Initial:");
-	print(allocator.DebugBlocks());
+	//print(allocator.DebugBlocks());
 
 	print("Allocate A (int)");
 	int* a = (int*)allocator.Allocate<int>(sizeof(int));
 	*a = 10;
-	print(allocator.DebugBlocks());
+	//print(allocator.DebugBlocks());
 
 	print("Allocate B (int)");
 	int* b = (int*)allocator.Allocate<int>(sizeof(int));
 	*b = 20;
-	print(allocator.DebugBlocks());
+	//print(allocator.DebugBlocks());
 
 	print("Allocate C (double)");
 	double* c = (double*)allocator.Allocate<double>(sizeof(double));

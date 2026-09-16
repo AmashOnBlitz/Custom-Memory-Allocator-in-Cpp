@@ -57,7 +57,7 @@ void* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 			}
 
 			SIZE_T sizeExceed = currentBlock->size - (offset + requiredSize);
-			if (bestBlock.first == nullptr || sizeExceed < bestBlock.second) {
+			if (std::get<0>(bestBlock) == nullptr || sizeExceed < std::get<1>(bestBlock)) {
 				bestBlock = { currentBlock, sizeExceed, offset };
 			}
 		}
@@ -65,49 +65,49 @@ void* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 		currentBlock = currentBlock->next;
 	}
 
-	if (bestBlock.first) {
-		SIZE_T originalSize = bestBlock.first->size;
-		SIZE_T usedSize = Align(bestBlock.third + requiredSize, alignof(RoutedBlockHeader));
+	if (std::get<0>(bestBlock)) {
+		SIZE_T originalSize = std::get<0>(bestBlock)->size;
+		SIZE_T usedSize = Align(std::get<2>(bestBlock) + requiredSize, alignof(RoutedBlockHeader));
 		SIZE_T remaining = originalSize - usedSize;
 		if (remaining >= sizeof(RoutedBlockHeader) + 1) {
-			RoutedBlockHeader* oldNext = bestBlock.first->next;
-			bestBlock.first->size = usedSize;
-			UINT8* newBlockArea = reinterpret_cast<UINT8*>(bestBlock.first + 1) + bestBlock.first->size;
+			RoutedBlockHeader* oldNext = std::get<0>(bestBlock)->next;
+			std::get<0>(bestBlock)->size = usedSize;
+			UINT8* newBlockArea = reinterpret_cast<UINT8*>(std::get<0>(bestBlock) + 1) + std::get<0>(bestBlock)->size;
 			RoutedBlockHeader* newBlock = reinterpret_cast<RoutedBlockHeader*>(newBlockArea);
 			newBlock->free = true;
 			newBlock->size = remaining - sizeof(RoutedBlockHeader);
-			newBlock->next = bestBlock.first->next;
+			newBlock->next = std::get<0>(bestBlock)->next;
 			if constexpr (CoalesceAlgo == CoalesceAlgorithm::LinkPrevious) {
-				newBlock->prev = bestBlock.first;
+				newBlock->prev = std::get<0>(bestBlock);
 				if (oldNext)
 					oldNext->prev = newBlock;
 			}
-			bestBlock.first->next = newBlock;
+			std::get<0>(bestBlock)->next = newBlock;
 		}
 
-		bestBlock.first->free = false;
+		std::get<0>(bestBlock)->free = false;
 
-		UINT8* rawAddress = reinterpret_cast<UINT8*>(bestBlock.first + 1);
-		UINT8* aligned = rawAddress + bestBlock.third;
-		*reinterpret_cast<SIZE_T*>(aligned - sizeof(SIZE_T)) = bestBlock.third;
+		UINT8* rawAddress = reinterpret_cast<UINT8*>(std::get<0>(bestBlock) + 1);
+		UINT8* aligned = rawAddress + std::get<2>(bestBlock);
+		*reinterpret_cast<SIZE_T*>(aligned - sizeof(SIZE_T)) = std::get<2>(bestBlock);
 		return reinterpret_cast<void*>(aligned);
 	}
 
 	UINT8* newBlockArea = reinterpret_cast<UINT8*>(previousBlock + 1) + previousBlock->size;
-	uintptr_t ptrNewBlockArea = reinterpret_cast<uintptr_t>(newBlockArea);
-	uintptr_t ptrNewBlockArOffset = ptrNewBlockArea + sizeof(SIZE_T);
+	RoutedBlockHeader* newBlock = reinterpret_cast<RoutedBlockHeader*>(newBlockArea);
+	uintptr_t rawAddress = reinterpret_cast<uintptr_t>(newBlock + 1);
+	uintptr_t ptrNewBlockArOffset = rawAddress + sizeof(SIZE_T);
 	UINT8* alignedNewBlockArea = reinterpret_cast<UINT8*>(
 		Align(ptrNewBlockArOffset, alignof(DataType))
 		);
 	UINT8* arenaEnd = reinterpret_cast<UINT8*>(mBase) + mArenaCapacity;
 	if (alignedNewBlockArea + requiredSize <= arenaEnd) {
-		RoutedBlockHeader* newBlock = reinterpret_cast<RoutedBlockHeader*>(newBlockArea);
 		newBlock->free = false;
 		newBlock->next = nullptr;
 
 		SIZE_T offset = static_cast<SIZE_T>(
 			reinterpret_cast<uintptr_t>(alignedNewBlockArea) -
-			reinterpret_cast<uintptr_t>(newBlockArea)
+			rawAddress
 			);
 		newBlock->size = requiredSize + offset;
 
