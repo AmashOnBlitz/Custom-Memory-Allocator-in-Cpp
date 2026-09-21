@@ -151,6 +151,9 @@
   <ItemGroup>
     <ClInclude Include="Include\allocator.h" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="Test\comparisionReport.md" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

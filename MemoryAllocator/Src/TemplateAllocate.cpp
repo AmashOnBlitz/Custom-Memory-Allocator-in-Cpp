@@ -1,4 +1,5 @@
-// Dont Include this file in your build this is just template definition and will be added in allocate.header auto...
+// NOTE (for self compilers): Dont Include this file in your build this is just template definition and will be added in allocate.header auto...
+
 #include "allocator.h"
 #include <stdexcept>
 #include <string>
@@ -69,21 +70,24 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 	if (std::get<0>(bestBlock)) {
 		SIZE_T originalSize = std::get<0>(bestBlock)->size;
 		SIZE_T usedSize = Align(std::get<2>(bestBlock) + requiredSize, alignof(RoutedBlockHeader));
-		SIZE_T remaining = originalSize - usedSize;
-		if (remaining >= sizeof(RoutedBlockHeader) + 1) {
-			RoutedBlockHeader* oldNext = std::get<0>(bestBlock)->next;
-			std::get<0>(bestBlock)->size = usedSize;
-			UINT8* newBlockArea = reinterpret_cast<UINT8*>(std::get<0>(bestBlock) + 1) + std::get<0>(bestBlock)->size;
-			RoutedBlockHeader* newBlock = reinterpret_cast<RoutedBlockHeader*>(newBlockArea);
-			newBlock->free = true;
-			newBlock->size = remaining - sizeof(RoutedBlockHeader);
-			newBlock->next = std::get<0>(bestBlock)->next;
-			if constexpr (CoalesceAlgo == CoalesceAlgorithm::LinkPrevious) {
-				newBlock->prev = std::get<0>(bestBlock);
-				if (oldNext)
-					oldNext->prev = newBlock;
+
+		if (usedSize <= originalSize) {
+			SIZE_T remaining = originalSize - usedSize;
+			if (remaining >= sizeof(RoutedBlockHeader) + 1) {
+				RoutedBlockHeader* oldNext = std::get<0>(bestBlock)->next;
+				std::get<0>(bestBlock)->size = usedSize;
+				UINT8* newBlockArea = reinterpret_cast<UINT8*>(std::get<0>(bestBlock) + 1) + std::get<0>(bestBlock)->size;
+				RoutedBlockHeader* newBlock = reinterpret_cast<RoutedBlockHeader*>(newBlockArea);
+				newBlock->free = true;
+				newBlock->size = remaining - sizeof(RoutedBlockHeader);
+				newBlock->next = std::get<0>(bestBlock)->next;
+				if constexpr (CoalesceAlgo == CoalesceAlgorithm::LinkPrevious) {
+					newBlock->prev = std::get<0>(bestBlock);
+					if (oldNext)
+						oldNext->prev = newBlock;
+				}
+				std::get<0>(bestBlock)->next = newBlock;
 			}
-			std::get<0>(bestBlock)->next = newBlock;
 		}
 
 		std::get<0>(bestBlock)->free = false;
@@ -91,7 +95,7 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 		UINT8* rawAddress = reinterpret_cast<UINT8*>(std::get<0>(bestBlock) + 1);
 		UINT8* aligned = rawAddress + std::get<2>(bestBlock);
 		*reinterpret_cast<SIZE_T*>(aligned - sizeof(SIZE_T)) = std::get<2>(bestBlock);
-		RETURN_CONSTRUCTED_MEMORY(DataType,reinterpret_cast<void*>(aligned));
+		RETURN_CONSTRUCTED_MEMORY(DataType, reinterpret_cast<void*>(aligned));
 	}
 
 	UINT8* newBlockArea = reinterpret_cast<UINT8*>(previousBlock + 1) + previousBlock->size;
