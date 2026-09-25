@@ -16,11 +16,11 @@ namespace StandardMemoryUnits {
 // Link Prev takes less time while Search from Head wastes less memory
 // On 10k allocations test, LinkPrev was approx 36.8% fast (64 bit Windows)
 // Fixed size eliminates block header but you can only store same data type (or more
-// specifically data types of same size) in it.
+// specifically data types of same alignment) in it.
 enum class CoalesceAlgorithm {
 	LinkPrevious,
 	SearchFromHead,
-	FixedSize_NoHeader
+	FixedAlignment_NoHeader
 };
 
 /*
@@ -52,9 +52,11 @@ struct AlgoSpecificData {
 };
 
 template<>
-struct AlgoSpecificData<CoalesceAlgorithm::FixedSize_NoHeader> {
-	std::vector<uintptr_t> freeBlocks;
-	int buffer;
+struct AlgoSpecificData<CoalesceAlgorithm::FixedAlignment_NoHeader> {
+	std::vector<uintptr_t> freeBlocks = {};
+	SIZE_T buffer = 0;
+	SIZE_T alignment = 0;
+	bool isFirstit = true;
 };
 
 template<CoalesceAlgorithm CoalesceAlgo>
@@ -67,7 +69,9 @@ public:
 	~Allocator();
 
 	template<typename DataType>
-	DataType* Allocate(SIZE_T requiredSize);
+	// custom required sizes will be ignored in FixedAlignment Algo as it will only return
+	// memory of the fixed size of the data type it was used upon
+	DataType* Allocate(SIZE_T requiredSize = sizeof(DataType));
 	void Deallocate(void* memory);
 	void Free(void* memory);
 	std::string DebugBlocks();
