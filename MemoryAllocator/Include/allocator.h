@@ -15,9 +15,12 @@ namespace StandardMemoryUnits {
 // Search From Head searches linearly from head list to prev list so O(n)
 // Link Prev takes less time while Search from Head wastes less memory
 // On 10k allocations test, LinkPrev was approx 36.8% fast (64 bit Windows)
+// Fixed size eliminates block header but you can only store same data type (or more
+// specifically data types of same size) in it.
 enum class CoalesceAlgorithm {
 	LinkPrevious,
-	SearchFromHead
+	SearchFromHead,
+	FixedSize_NoHeader
 };
 
 /*
@@ -43,6 +46,17 @@ struct BlockHeader<CoalesceAlgorithm::LinkPrevious> {
 	//SIZE_T alignmentOffset;
 };
 
+template<CoalesceAlgorithm Algo>
+struct AlgoSpecificData {
+
+};
+
+template<>
+struct AlgoSpecificData<CoalesceAlgorithm::FixedSize_NoHeader> {
+	std::vector<uintptr_t> freeBlocks;
+	int buffer;
+};
+
 template<CoalesceAlgorithm CoalesceAlgo>
 class Allocator
 {
@@ -60,11 +74,13 @@ public:
 
 private:
 	uintptr_t Align(uintptr_t rawAddr, uintptr_t alignment); // uintptr_t to do int maths on pointer 
+
 private:
 	void* mMemoryArena;
 	UINT8* mBase; //UINT cuz its pointer to individual bytes (in this case base of mem i.e 0x100)
 	SIZE_T mArenaCapacity;
 	RoutedBlockHeader* mHeadMemBlock;
+	AlgoSpecificData<CoalesceAlgo> algoSpecificData;
 };
 
 #include "..\Src\TemplateAllocate.cpp"

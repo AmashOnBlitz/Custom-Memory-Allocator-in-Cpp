@@ -52,15 +52,18 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 			uintptr_t addrSlot = rawAddress + sizeof(SIZE_T);
 			uintptr_t aligned = Align(addrSlot, alignof(DataType));
 			SIZE_T offset = static_cast<SIZE_T>(aligned - rawAddress);
-			if ((aligned + requiredSize) > rawAddress + currentBlock->size) {
+			SIZE_T usedSize = Align(offset + requiredSize, alignof(RoutedBlockHeader));
+			if (usedSize > currentBlock->size) {
 				previousBlock = currentBlock;
 				currentBlock = currentBlock->next;
 				continue;
 			}
 
-			SIZE_T sizeExceed = currentBlock->size - (offset + requiredSize);
+			SIZE_T sizeExceed = currentBlock->size - usedSize;
 			if (std::get<0>(bestBlock) == nullptr || sizeExceed < std::get<1>(bestBlock)) {
 				bestBlock = { currentBlock, sizeExceed, offset };
+				if (sizeExceed == 0)
+					break;
 			}
 		}
 		previousBlock = currentBlock;
