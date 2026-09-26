@@ -21,6 +21,25 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 			algoSpecificData.alignment = alignof(DataType);
 			algoSpecificData.size = sizeof(DataType);
 			isFirstit = !isFirstit;
+
+			SIZE_T& buffer = algoSpecificData.buffer;
+			uintptr_t freeAddr = mBase + buffer;
+			freeAddr = Align(freeAddr, alignof(DataType));
+			SIZE_T alignedBuff = (freeAddr - mBase);
+			algoSpecificData.memPrefixAlignment = alignedBuff;
+			algoSpecificData.maxAllocations = (mArenaCapacity - alignedBuff) / sizeof(DataType);
+			SIZE_T metaDataArenaCapacity = (algoSpecificData.maxAllocations + 7) / 8;
+			algoSpecificData.mMemoryMetaDataArena = ::VirtualAlloc(
+				nullptr,
+				metaDataArenaCapacity,
+				MEM_COMMIT | MEM_RESERVE,
+				PAGE_READWRITE
+			);
+
+			if (!algoSpecificData.mMemoryMetaDataArena)
+				throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Cannot prepare arena to allocate memory"));
+
+			algoSpecificData.mMetaDataBase = static_cast<UINT8*>(algoSpecificData.mMemoryMetaDataArena);
 		}
 		else {
 			if (alignof(DataType) != algoSpecificData.alignment ||
@@ -34,10 +53,30 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 		uintptr_t freeAddr = mBase + buffer;
 		freeAddr = Align(freeAddr, alignof(DataType));
 		SIZE_T alignedBuff = (freeAddr - mBase) + sizeof(DataType);
+		
+		for (SIZE_T i = { 0 }; i < algoSpecificData.allocationIt; i++) {
+			SIZE_T byteIndex = i / 8;
+			UINT8 bitMask = static_cast<UINT8>(1u << (i % 8));
+			if ((algoSpecificData.mMetaDataBase[byteIndex] & bitMask) == 0) {
+				algoSpecificData.mMetaDataBase[byteIndex] |= bitMask;
+				void* mem = reinterpret_cast<void*>(mBase + algoSpecificData.memPrefixAlignment + i * sizeof(DataType));
+				RETURN_CONSTRUCTED_MEMORY(DataType, mem);
+			}
+		}
+		
 		if (alignedBuff > mArenaCapacity)
 			throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Arena too small to allocate"));
+		if (algoSpecificData.allocationIt >= algoSpecificData.maxAllocations)
+			throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Arena too small to allocate"));
+
 		buffer = alignedBuff;
-		return freeAddr;
+
+		SIZE_T byteIndex = algoSpecificData.allocationIt / 8;
+		UINT8 bitMask = static_cast<UINT8>(1u << (algoSpecificData.allocationIt % 8));
+		algoSpecificData.mMetaDataBase[byteIndex] |= bitMask;
+
+		algoSpecificData.allocationIt += 1;
+		RETURN_CONSTRUCTED_MEMORY(DataType, reinterpret_cast<void*>(freeAddr));
 	}
 	else {
 		if (mArenaCapacity < sizeof(RoutedBlockHeader) || requiredSize >(mArenaCapacity - sizeof(RoutedBlockHeader)))

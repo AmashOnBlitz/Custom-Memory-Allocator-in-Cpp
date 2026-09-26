@@ -51,17 +51,18 @@ struct AlgoSpecificData {
 
 };
 
-struct FreeBlock {
-	FreeBlock* next;
-};
-
 template<>
 struct AlgoSpecificData<CoalesceAlgorithm::FixedSize_NoHeader> {
-	FreeBlock* freeList = nullptr;
 	SIZE_T buffer = 0;
 	SIZE_T alignment = 0;
 	SIZE_T size = 0;
+	SIZE_T allocationIt = 0;
+	SIZE_T memPrefixAlignment = 0;
 	bool isFirstit = true;
+	// Convection Used: bit == 1 will be used and bit == 0 will be free
+	void* mMemoryMetaDataArena = nullptr;
+	UINT8* mMetaDataBase = nullptr;
+	UINT8* maxAllocations = 0;
 };
 
 template<CoalesceAlgorithm CoalesceAlgo>
@@ -73,7 +74,7 @@ public:
 	Allocator(SIZE_T arenaSize);
 	~Allocator();
 
-	// Custom required sizes will be ignored in FixedAlignment Algo
+	// Custom required sizes will be ignored in FixedSize Algo
 	// it will return the memory equal to sizeof data type it was bound to
 	// and its alignment will be alignof the same data type
 	template<typename DataType>
