@@ -26,6 +26,8 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 			uintptr_t freeAddr = mBase + buffer;
 			freeAddr = Align(freeAddr, alignof(DataType));
 			SIZE_T alignedBuff = (freeAddr - mBase);
+			if (alignedBuff >= mArenaCapacity)
+				throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Arena too small to allocate"));
 			algoSpecificData.memPrefixAlignment = alignedBuff;
 			algoSpecificData.maxAllocations = (mArenaCapacity - alignedBuff) / sizeof(DataType);
 			SIZE_T metaDataArenaCapacity = (algoSpecificData.maxAllocations + 7) / 8;
@@ -54,10 +56,15 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 		freeAddr = Align(freeAddr, alignof(DataType));
 		SIZE_T alignedBuff = (freeAddr - mBase) + sizeof(DataType);
 		
-		for (SIZE_T i = { 0 }; i < algoSpecificData.allocationIt; i++) {
-			SIZE_T byteIndex = i / 8;
-			UINT8 bitMask = static_cast<UINT8>(1u << (i % 8));
-			if ((algoSpecificData.mMetaDataBase[byteIndex] & bitMask) == 0) {
+		for (SIZE_T byteIndex = 0; byteIndex < allocationIt / 8; byteIndex++) {
+			UINT8 byte = algoSpecificData.mMetaDataBase[byteIndex];
+			if (byte == 0xFF)
+				continue;
+			SIZE_T bit = std::countr_zero(static_cast<unsigned>(~byte));
+			SIZE_T i = byteIndex * 8 + bit;
+
+			if (i < allocationIt) {
+				UINT8 bitMask = static_cast<UINT8>(1u << bit);
 				algoSpecificData.mMetaDataBase[byteIndex] |= bitMask;
 				void* mem = reinterpret_cast<void*>(mBase + algoSpecificData.memPrefixAlignment + i * sizeof(DataType));
 				RETURN_CONSTRUCTED_MEMORY(DataType, mem);
