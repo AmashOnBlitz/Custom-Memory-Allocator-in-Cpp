@@ -50,6 +50,15 @@ Allocator<CoalesceAlgo>::~Allocator()
 			algoSpecificData.mMemoryMetaDataArena = nullptr;
 			algoSpecificData.mMetaDataBase = nullptr;
 		}
+		if (algoSpecificData.mFreeStackArena) {
+			::VirtualFree(
+				algoSpecificData.mFreeStackArena,
+				0,
+				MEM_RELEASE
+			);
+			algoSpecificData.mFreeStackArena = nullptr;
+			algoSpecificData.mFreeStackBase = nullptr;
+		}
 	}
 }
 
@@ -75,6 +84,8 @@ void Allocator<CoalesceAlgo>::Deallocate(void* memory)
 		if ((algoSpecificData.mMetaDataBase[byteIndex] & bitMask) == 0)
 			throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Cannot Deallocate/Free already free memory"));
 		algoSpecificData.mMetaDataBase[byteIndex] &= static_cast<UINT8>(~bitMask);
+
+		algoSpecificData.mFreeStackBase[algoSpecificData.freeStackTop++] = index;
 	}
 	else {
 		uintptr_t slotArea = reinterpret_cast<uintptr_t>(memory) - sizeof(SIZE_T);
