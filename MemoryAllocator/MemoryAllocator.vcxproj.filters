@@ -24,9 +24,15 @@
     <ClCompile Include="Src\TemplateAllocate.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Test\AllAlgoComp.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Include\allocator.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Test\AllAlgoComp.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
