@@ -15,22 +15,28 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 	if (requiredSize == 0)
 		throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Cannot Allocate 0 bytes"));
 
-	if constexpr (CoalesceAlgo == CoalesceAlgorithm::FixedAlignment_NoHeader) {
+	if constexpr (CoalesceAlgo == CoalesceAlgorithm::FixedSize_NoHeader) {
 		bool& isFirstit = algoSpecificData.isFirstit;
 		if (isFirstit) {
 			algoSpecificData.alignment = alignof(DataType);
+			algoSpecificData.size = sizeof(DataType);
 			isFirstit = !isFirstit;
 		}
 		else {
-			if (alignof(DataType) != algoSpecificData.alignment)
+			if (alignof(DataType) != algoSpecificData.alignment ||
+				sizeof(DataType) != algoSpecificData.size
+				)
 				throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Trying to allocate memory to different data types!\n \
-											(data types with different alignment) through FixedAlignment algorithm"));
+																through FixedSize algorithm"));
 		}
+
 		SIZE_T& buffer = algoSpecificData.buffer;
 		uintptr_t freeAddr = mBase + buffer;
-		if (freeAddr == mBase)
-			freeAddr = Align(freeAddr, alignof(DataType));
-		buffer = (freeAddr - mBase) + alignof(DataType);
+		freeAddr = Align(freeAddr, alignof(DataType));
+		SIZE_T alignedBuff = (freeAddr - mBase) + sizeof(DataType);
+		if (alignedBuff > mArenaCapacity)
+			throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Arena too small to allocate"));
+		buffer = alignedBuff;
 		return freeAddr;
 	}
 	else {
