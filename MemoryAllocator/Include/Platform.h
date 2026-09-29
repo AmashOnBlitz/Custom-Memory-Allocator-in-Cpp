@@ -4,9 +4,12 @@
 #include <Windows.h>
 #endif 
 
+
 #if defined(__linux__) || defined(__APPLE__)
 #include <cstddef>
 #include <cstdint>
+#include <sys/mman.h>
+#include <unistd.h>
 
 using SIZE_T = std::size_t;
 using UINT8 = std::uint8_t;
@@ -26,11 +29,14 @@ using LPVOID = void*;
 #endif
 
 #ifdef __APPLE__
+#ifndef MAP_ANONYMOUS
+#define MAP_ANONYMOUS MAP_ANON
+#endif
 #endif
 
-
+// Current API promises to provide addr as a hint in Unix systems
+// and does not flag MAP_FIXED so ONLY USE nullptr/NULL in unix systems 
 void* AllocateMemory(void* addr, SIZE_T size);
 
-// Just like Win use size = 0 for freeing whole mem block
-// In Windows platform size will be ignored and 0 will be taken
-bool FreeMemory(void* addr, SIZE_T size = 0);
+// Provide size EXPLICICTLY as in unix system we needa pass it 
+bool FreeMemory(void* addr, SIZE_T size);

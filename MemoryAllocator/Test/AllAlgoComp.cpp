@@ -1,8 +1,10 @@
 #include "AllAlgoComp.h"
-#include <Platform.h>
+#include <chrono>
+#include <cstddef>
+#include <cstdlib>
 #include <iostream>
-#include <vector>
 #include <random>
+#include <vector>
 
 #define print(x) std::cout << x << "\n";
 
@@ -13,161 +15,247 @@ struct BenchResult {
 	double totalRunMs = 0.0;
 };
 
-double ElapsedMs(LARGE_INTEGER start, LARGE_INTEGER end, LARGE_INTEGER freq)
+using Clock = std::chrono::steady_clock;
+
+static inline double NsBetween(Clock::time_point a, Clock::time_point b)
 {
-	return (double)(end.QuadPart - start.QuadPart) * 1000.0 / (double)freq.QuadPart;
+	return (double)std::chrono::duration_cast<std::chrono::nanoseconds>(b - a).count();
 }
 
-double ElapsedNs(LARGE_INTEGER start, LARGE_INTEGER end, LARGE_INTEGER freq)
+template<typename AllocFn, typename FreeFn>
+BenchResult StressCore(std::size_t allocationCount, bool chaotic, AllocFn allocFn, FreeFn freeFn)
 {
-	return (double)(end.QuadPart - start.QuadPart) * 1000000000.0 / (double)freq.QuadPart;
+	std::vector<int*> liveBlocks;
+	liveBlocks.reserve(allocationCount);
+
+	double allocNsTotal = 0.0;
+	double freeNsTotal = 0.0;
+	double worstFreeNs = 0.0;
+	std::size_t freeCount = 0;
+
+	std::mt19937 rng(12345);
+	std::uniform_int_distribution<int> coinFlip(0, 1);
+
+	auto timedFree = [&](int* p) {
+		auto freeStart = Clock::now();
+		freeFn(p);
+		auto freeEnd = Clock::now();
+		double freeNs = NsBetween(freeStart, freeEnd);
+		freeNsTotal += freeNs;
+		freeCount += 1;
+		if (freeNs > worstFreeNs)
+			worstFreeNs = freeNs;
+	};
+
+	auto tStart = Clock::now();
+
+	for (std::size_t i = 0; i < allocationCount; i++) {
+		auto opStart = Clock::now();
+		int* mem = allocFn();
+		auto opEnd = Clock::now();
+		allocNsTotal += NsBetween(opStart, opEnd);
+
+		*mem = (int)i;
+		liveBlocks.push_back(mem);
+
+		bool shouldFree = chaotic ? (coinFlip(rng) == 1) : (i % 2 == 1);
+		if (shouldFree && !liveBlocks.empty()) {
+			std::size_t pickIndex = chaotic ? (rng() % liveBlocks.size()) : (liveBlocks.size() - 1);
+			int* toFree = liveBlocks[pickIndex];
+			liveBlocks.erase(liveBlocks.begin() + pickIndex);
+			timedFree(toFree);
+		}
+	}
+
+	for (int* mem : liveBlocks)
+		timedFree(mem);
+
+	auto tEnd = Clock::now();
+
+	BenchResult result;
+	result.avgAllocNs = allocNsTotal / (double)allocationCount;
+	result.avgFreeNs = (freeCount > 0) ? (freeNsTotal / (double)freeCount) : 0.0;
+	result.worstFreeUs = worstFreeNs / 1000.0;
+	result.totalRunMs = NsBetween(tStart, tEnd) / 1000000.0;
+
+	return result;
 }
 
 template<CoalesceAlgorithm Algo>
-BenchResult StressTest(SIZE_T arenaSize, SIZE_T allocationCount, bool chaotic)
+BenchResult StressTest(std::size_t arenaSize, std::size_t allocationCount, bool chaotic)
 {
-	LARGE_INTEGER freq, tStart, tEnd;
-	QueryPerformanceFrequency(&freq);
-
 	Allocator<Algo> allocator(arenaSize);
+	return StressCore(allocationCount, chaotic,
+					  [&] { return allocator.template Allocate<int>(sizeof(int)); },
+					  [&](int* p) { allocator.Free(p); });
+}
 
-	std::vector<int*> liveBlocks;
+BenchResult StressTestCppDefault(std::size_t allocationCount, bool chaotic)
+{
+	return StressCore(allocationCount, chaotic,
+					  [] { return (int*)std::malloc(sizeof(int)); },
+					  [](int* p) { std::free(p); });
+}
+
+struct Payload64 { char data[64]; };
+struct Payload256 { char data[256]; };
+
+constexpr int MixedTypeCount = 6;
+
+const char* MixedTypeNames[MixedTypeCount] = {
+	"char        ",
+	"short       ",
+	"int         ",
+	"double      ",
+	"64B struct  ",
+	"256B struct "
+};
+
+struct MixedResult {
+	double allocNs[MixedTypeCount] = {};
+	double freeNs[MixedTypeCount] = {};
+	std::size_t allocCount[MixedTypeCount] = {};
+	std::size_t freeCount[MixedTypeCount] = {};
+	double worstFreeUs = 0.0;
+	double totalRunMs = 0.0;
+};
+
+template<CoalesceAlgorithm Algo>
+void* MixedAllocate(Allocator<Algo>& allocator, int type)
+{
+	switch (type) {
+	case 0: return allocator.template Allocate<char>(sizeof(char));
+	case 1: return allocator.template Allocate<short>(sizeof(short));
+	case 2: return allocator.template Allocate<int>(sizeof(int));
+	case 3: return allocator.template Allocate<double>(sizeof(double));
+	case 4: return allocator.template Allocate<Payload64>(sizeof(Payload64));
+	default: return allocator.template Allocate<Payload256>(sizeof(Payload256));
+	}
+}
+
+template<CoalesceAlgorithm Algo>
+void MixedFree(Allocator<Algo>& allocator, void* ptr, int type)
+{
+	switch (type) {
+	case 0: allocator.Free(static_cast<char*>(ptr)); break;
+	case 1: allocator.Free(static_cast<short*>(ptr)); break;
+	case 2: allocator.Free(static_cast<int*>(ptr)); break;
+	case 3: allocator.Free(static_cast<double*>(ptr)); break;
+	case 4: allocator.Free(static_cast<Payload64*>(ptr)); break;
+	default: allocator.Free(static_cast<Payload256*>(ptr)); break;
+	}
+}
+
+inline std::size_t MixedTypeSize(int type)
+{
+	switch (type) {
+	case 0: return sizeof(char);
+	case 1: return sizeof(short);
+	case 2: return sizeof(int);
+	case 3: return sizeof(double);
+	case 4: return sizeof(Payload64);
+	default: return sizeof(Payload256);
+	}
+}
+
+template<typename AllocFn, typename FreeFn>
+MixedResult MixedCore(std::size_t allocationCount, bool chaotic, AllocFn allocFn, FreeFn freeFn)
+{
+	struct LiveBlock {
+		void* ptr;
+		int type;
+	};
+
+	std::vector<LiveBlock> liveBlocks;
 	liveBlocks.reserve(allocationCount);
 
-	double allocNsTotal = 0.0;
-	double freeNsTotal = 0.0;
+	MixedResult result;
+	double allocNsSum[MixedTypeCount] = {};
+	double freeNsSum[MixedTypeCount] = {};
 	double worstFreeNs = 0.0;
-	SIZE_T freeCount = 0;
 
 	std::mt19937 rng(12345);
 	std::uniform_int_distribution<int> coinFlip(0, 1);
+	std::uniform_int_distribution<int> typePick(0, MixedTypeCount - 1);
 
-	QueryPerformanceCounter(&tStart);
+	auto timedFree = [&](LiveBlock block) {
+		auto freeStart = Clock::now();
+		freeFn(block.ptr, block.type);
+		auto freeEnd = Clock::now();
+		double freeNs = NsBetween(freeStart, freeEnd);
+		freeNsSum[block.type] += freeNs;
+		result.freeCount[block.type] += 1;
+		if (freeNs > worstFreeNs)
+			worstFreeNs = freeNs;
+	};
 
-	for (SIZE_T i = 0; i < allocationCount; i++) {
-		LARGE_INTEGER opStart, opEnd;
-		QueryPerformanceCounter(&opStart);
-		int* mem = allocator.template Allocate<int>(sizeof(int));
-		QueryPerformanceCounter(&opEnd);
-		allocNsTotal += ElapsedNs(opStart, opEnd, freq);
+	auto tStart = Clock::now();
 
-		*mem = (int)i;
-		liveBlocks.push_back(mem);
+	for (std::size_t i = 0; i < allocationCount; i++) {
+		int type = typePick(rng);
+
+		auto opStart = Clock::now();
+		void* mem = allocFn(type);
+		auto opEnd = Clock::now();
+		allocNsSum[type] += NsBetween(opStart, opEnd);
+		result.allocCount[type] += 1;
+
+		*static_cast<char*>(mem) = (char)i;
+		liveBlocks.push_back({ mem, type });
 
 		bool shouldFree = chaotic ? (coinFlip(rng) == 1) : (i % 2 == 1);
 		if (shouldFree && !liveBlocks.empty()) {
-			SIZE_T pickIndex = chaotic ? (rng() % liveBlocks.size()) : (liveBlocks.size() - 1);
-			int* toFree = liveBlocks[pickIndex];
+			std::size_t pickIndex = chaotic ? (rng() % liveBlocks.size()) : (liveBlocks.size() - 1);
+			LiveBlock toFree = liveBlocks[pickIndex];
 			liveBlocks.erase(liveBlocks.begin() + pickIndex);
-
-			LARGE_INTEGER freeStart, freeEnd;
-			QueryPerformanceCounter(&freeStart);
-			allocator.Free(toFree);
-			QueryPerformanceCounter(&freeEnd);
-			double freeNs = ElapsedNs(freeStart, freeEnd, freq);
-			freeNsTotal += freeNs;
-			freeCount += 1;
-			if (freeNs > worstFreeNs)
-				worstFreeNs = freeNs;
+			timedFree(toFree);
 		}
 	}
 
-	for (int* mem : liveBlocks) {
-		LARGE_INTEGER freeStart, freeEnd;
-		QueryPerformanceCounter(&freeStart);
-		allocator.Free(mem);
-		QueryPerformanceCounter(&freeEnd);
-		double freeNs = ElapsedNs(freeStart, freeEnd, freq);
-		freeNsTotal += freeNs;
-		freeCount += 1;
-		if (freeNs > worstFreeNs)
-			worstFreeNs = freeNs;
+	for (LiveBlock block : liveBlocks)
+		timedFree(block);
+
+	auto tEnd = Clock::now();
+
+	for (int t = 0; t < MixedTypeCount; t++) {
+		result.allocNs[t] = (result.allocCount[t] > 0) ? (allocNsSum[t] / (double)result.allocCount[t]) : 0.0;
+		result.freeNs[t] = (result.freeCount[t] > 0) ? (freeNsSum[t] / (double)result.freeCount[t]) : 0.0;
 	}
-
-	QueryPerformanceCounter(&tEnd);
-
-	BenchResult result;
-	result.avgAllocNs = allocNsTotal / (double)allocationCount;
-	result.avgFreeNs = (freeCount > 0) ? (freeNsTotal / (double)freeCount) : 0.0;
 	result.worstFreeUs = worstFreeNs / 1000.0;
-	result.totalRunMs = ElapsedMs(tStart, tEnd, freq);
+	result.totalRunMs = NsBetween(tStart, tEnd) / 1000000.0;
 
 	return result;
 }
 
-BenchResult StressTestCppDefault(SIZE_T allocationCount, bool chaotic)
+template<CoalesceAlgorithm Algo>
+MixedResult MixedStressTest(std::size_t arenaSize, std::size_t allocationCount, bool chaotic)
 {
-	LARGE_INTEGER freq, tStart, tEnd;
-	QueryPerformanceFrequency(&freq);
+	Allocator<Algo> allocator(arenaSize);
+	return MixedCore(allocationCount, chaotic,
+					 [&](int type) { return MixedAllocate(allocator, type); },
+					 [&](void* p, int type) { MixedFree(allocator, p, type); });
+}
 
-	std::vector<int*> liveBlocks;
-	liveBlocks.reserve(allocationCount);
+MixedResult MixedStressTestCppDefault(std::size_t allocationCount, bool chaotic)
+{
+	return MixedCore(allocationCount, chaotic,
+					 [](int type) { return std::malloc(MixedTypeSize(type)); },
+					 [](void* p, int) { std::free(p); });
+}
 
-	double allocNsTotal = 0.0;
-	double freeNsTotal = 0.0;
-	double worstFreeNs = 0.0;
-	SIZE_T freeCount = 0;
-
-	std::mt19937 rng(12345);
-	std::uniform_int_distribution<int> coinFlip(0, 1);
-
-	QueryPerformanceCounter(&tStart);
-
-	for (SIZE_T i = 0; i < allocationCount; i++) {
-		LARGE_INTEGER opStart, opEnd;
-		QueryPerformanceCounter(&opStart);
-		int* mem = (int*)std::malloc(sizeof(int));
-		QueryPerformanceCounter(&opEnd);
-		allocNsTotal += ElapsedNs(opStart, opEnd, freq);
-
-		*mem = (int)i;
-		liveBlocks.push_back(mem);
-
-		bool shouldFree = chaotic ? (coinFlip(rng) == 1) : (i % 2 == 1);
-		if (shouldFree && !liveBlocks.empty()) {
-			SIZE_T pickIndex = chaotic ? (rng() % liveBlocks.size()) : (liveBlocks.size() - 1);
-			int* toFree = liveBlocks[pickIndex];
-			liveBlocks.erase(liveBlocks.begin() + pickIndex);
-
-			LARGE_INTEGER freeStart, freeEnd;
-			QueryPerformanceCounter(&freeStart);
-			std::free(toFree);
-			QueryPerformanceCounter(&freeEnd);
-			double freeNs = ElapsedNs(freeStart, freeEnd, freq);
-			freeNsTotal += freeNs;
-			freeCount += 1;
-			if (freeNs > worstFreeNs)
-				worstFreeNs = freeNs;
-		}
-	}
-
-	for (int* mem : liveBlocks) {
-		LARGE_INTEGER freeStart, freeEnd;
-		QueryPerformanceCounter(&freeStart);
-		std::free(mem);
-		QueryPerformanceCounter(&freeEnd);
-		double freeNs = ElapsedNs(freeStart, freeEnd, freq);
-		freeNsTotal += freeNs;
-		freeCount += 1;
-		if (freeNs > worstFreeNs)
-			worstFreeNs = freeNs;
-	}
-
-	QueryPerformanceCounter(&tEnd);
-
-	BenchResult result;
-	result.avgAllocNs = allocNsTotal / (double)allocationCount;
-	result.avgFreeNs = (freeCount > 0) ? (freeNsTotal / (double)freeCount) : 0.0;
-	result.worstFreeUs = worstFreeNs / 1000.0;
-	result.totalRunMs = ElapsedMs(tStart, tEnd, freq);
-
-	return result;
+void PrintMixedResult(const char* name, const MixedResult& r)
+{
+	print(name);
+	for (int t = 0; t < MixedTypeCount; t++)
+		print("  " << MixedTypeNames[t] << " alloc: " << r.allocNs[t] << " ns, free: " << r.freeNs[t] << " ns");
+	print("  worst free spike: " << r.worstFreeUs << " us");
+	print("  total run time:   " << r.totalRunMs << " ms\n");
 }
 
 void RunAllAlgoComparisionBenchmark()
 {
-	SIZE_T arenaSize = StandardMemoryUnits::MB * 512;
-	SIZE_T allocationCount = 250000;
+	std::size_t arenaSize = StandardMemoryUnits::MB * 512;
+	std::size_t allocationCount = 250000;
 
 	print("Allocator Benchmark =====================\n");
 
@@ -245,4 +333,44 @@ void RunAllAlgoComparisionBenchmark()
 	print("Also FixedSize_NoHeader uses 1 bit of memory per alloc in external bitmap metadata, no in memory header");
 
 	print("\n===========================================");
+}
+
+void RunMixedTypeComparisionBenchmark()
+{
+	std::size_t arenaSize = StandardMemoryUnits::MB * 512;
+	std::size_t allocationCount = 250000;
+
+	print("Mixed Type Benchmark ====================\n");
+
+	print("Running LinkPrevious (heavy/chaotic)...");
+	MixedResult linkPrevHeavy = MixedStressTest<CoalesceAlgorithm::LinkPrevious>(arenaSize, allocationCount, true);
+
+	print("Running LinkPrevious (light/orderly)...");
+	MixedResult linkPrevLight = MixedStressTest<CoalesceAlgorithm::LinkPrevious>(arenaSize, allocationCount, false);
+
+	print("Running SearchFromHead (heavy/chaotic)...");
+	MixedResult searchHeadHeavy = MixedStressTest<CoalesceAlgorithm::SearchFromHead>(arenaSize, allocationCount, true);
+
+	print("Running SearchFromHead (light/orderly)...");
+	MixedResult searchHeadLight = MixedStressTest<CoalesceAlgorithm::SearchFromHead>(arenaSize, allocationCount, false);
+
+	print("Running CPP_Default -- malloc/free (heavy/chaotic)...");
+	MixedResult cppDefaultHeavy = MixedStressTestCppDefault(allocationCount, true);
+
+	print("Running CPP_Default -- malloc/free (light/orderly)...");
+	MixedResult cppDefaultLight = MixedStressTestCppDefault(allocationCount, false);
+
+	print("\nResults ==================================\n");
+
+	print("Heavy/chaotic use ------------------------\n");
+	PrintMixedResult("LinkPrevious:", linkPrevHeavy);
+	PrintMixedResult("SearchFromHead:", searchHeadHeavy);
+	PrintMixedResult("CPP_Default:", cppDefaultHeavy);
+
+	print("Light/orderly use ------------------------\n");
+	PrintMixedResult("LinkPrevious:", linkPrevLight);
+	PrintMixedResult("SearchFromHead:", searchHeadLight);
+	PrintMixedResult("CPP_Default:", cppDefaultLight);
+
+	print("===========================================");
 }
