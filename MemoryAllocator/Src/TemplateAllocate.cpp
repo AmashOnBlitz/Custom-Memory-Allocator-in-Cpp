@@ -42,12 +42,7 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 			algoSpecificData.memPrefixAlignment = alignedBuff;
 			algoSpecificData.maxAllocations = (mArenaCapacity - alignedBuff) / algoSpecificData.slotSize;
 			SIZE_T metaDataArenaCapacity = (algoSpecificData.maxAllocations + 7) / 8;
-			algoSpecificData.mMemoryMetaDataArena = ::VirtualAlloc(
-				nullptr,
-				metaDataArenaCapacity,
-				MEM_COMMIT | MEM_RESERVE,
-				PAGE_READWRITE
-			);
+			algoSpecificData.mMemoryMetaDataArena = ::AllocateMemory(nullptr, metaDataArenaCapacity);
 
 			if (!algoSpecificData.mMemoryMetaDataArena)
 				throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Cannot prepare arena to allocate memory"));

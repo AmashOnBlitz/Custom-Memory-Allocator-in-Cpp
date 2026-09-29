@@ -142,6 +142,8 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Src\allocator.cpp" />
+    <ClCompile Include="Src\Platform\Unix.cpp" />
+    <ClCompile Include="Src\Platform\Windows.cpp" />
     <ClCompile Include="Src\TemplateAllocate.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>

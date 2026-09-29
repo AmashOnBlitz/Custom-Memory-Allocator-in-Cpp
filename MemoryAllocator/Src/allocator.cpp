@@ -15,12 +15,7 @@ Allocator<CoalesceAlgo>::Allocator(SIZE_T arenaSize) :
 	if (mArenaCapacity == 0)
 		throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Cannot Reserve 0 bytes"));
 
-	mMemoryArena = ::VirtualAlloc(
-		nullptr,
-		mArenaCapacity,
-		MEM_COMMIT | MEM_RESERVE,
-		PAGE_READWRITE
-	);
+	mMemoryArena = ::AllocateMemory(nullptr, mArenaCapacity);
 
 	if (!mMemoryArena)
 		throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Cannot Reserve Memory, VirtualAlloc Failed!"));
@@ -32,21 +27,13 @@ template<CoalesceAlgorithm CoalesceAlgo>
 Allocator<CoalesceAlgo>::~Allocator()
 {
 	if (mMemoryArena) {
-		::VirtualFree(
-			mMemoryArena,
-			0,
-			MEM_RELEASE
-		);
+		::FreeMemory(mMemoryArena, 0);
 		mMemoryArena = nullptr;
 		mBase = nullptr;
 	}
 	if constexpr (CoalesceAlgo == CoalesceAlgorithm::FixedSize_NoHeader) {
 		if (algoSpecificData.mMemoryMetaDataArena) {
-			::VirtualFree(
-				algoSpecificData.mMemoryMetaDataArena,
-				0,
-				MEM_RELEASE
-			);
+			::FreeMemory(algoSpecificData.mMemoryMetaDataArena, 0);
 			algoSpecificData.mMemoryMetaDataArena = nullptr;
 			algoSpecificData.mMetaDataBase = nullptr;
 		}
