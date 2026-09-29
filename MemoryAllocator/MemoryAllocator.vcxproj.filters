@@ -35,6 +35,9 @@
     <ClInclude Include="Test\AllAlgoComp.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Include\Platform.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="Test\comparisionReport.md" />

@@ -95,4 +95,4 @@ private:
 	AlgoSpecificData<CoalesceAlgo> algoSpecificData;
 };
 
-#include "..\Src\TemplateAllocate.cpp"
+#include "../Src/TemplateAllocate.cpp"

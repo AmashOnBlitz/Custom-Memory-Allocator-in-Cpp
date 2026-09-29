@@ -151,6 +151,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Include\allocator.h" />
+    <ClInclude Include="Include\Platform.h" />
     <ClInclude Include="Test\AllAlgoComp.h" />
   </ItemGroup>
   <ItemGroup>
