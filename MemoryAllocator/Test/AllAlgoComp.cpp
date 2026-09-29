@@ -1,5 +1,5 @@
 #include "AllAlgoComp.h"
-#include <Windows.h>
+#include <Platform.h>
 #include <iostream>
 #include <vector>
 #include <random>
