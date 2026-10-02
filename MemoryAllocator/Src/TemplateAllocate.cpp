@@ -108,6 +108,15 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 		if (mArenaCapacity < sizeof(RoutedBlockHeader) || requiredSize >(mArenaCapacity - sizeof(RoutedBlockHeader)))
 			throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Arena too small to allocate"));
 
+		bool& isFirstit = algoSpecificData.isFirstit;
+		if (isFirstit) {
+			algoSpecificData.maxAllocations = mArenaCapacity / (sizeof(RoutedBlockHeader) + 1);
+			SIZE_T freeStackCapacity = (algoSpecificData.maxAllocations * 2) * sizeof(SIZE_T);
+			algoSpecificData.mFreeStackArena = ::AllocateMemory(nullptr, freeStackCapacity);
+			isFirstit = !isFirstit;
+			algoSpecificData.mFreeStackBase = static_cast<SIZE_T*>(algoSpecificData.mFreeStackArena);
+		}
+
 		if (!mHeadMemBlock) {
 			mHeadMemBlock = reinterpret_cast<RoutedBlockHeader*>(mBase);
 
@@ -130,22 +139,26 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 			RETURN_CONSTRUCTED_MEMORY(DataType, reinterpret_cast<void*>(aligned));
 		}
 
-		RoutedBlockHeader* previousBlock = mHeadMemBlock;
-		RoutedBlockHeader* currentBlock = mHeadMemBlock;
-
 		std::tuple<RoutedBlockHeader*, SIZE_T, SIZE_T> bestBlock = { nullptr, 0, 0 };
 
-		while (currentBlock) {
-			SIZE_T totalDataSize = currentBlock->size;
-			if (currentBlock->free && totalDataSize >= requiredSize) {
-				uintptr_t rawAddress = reinterpret_cast<uintptr_t>(currentBlock + 1);
+		if (algoSpecificData.freeStackTop > 0) {
+			int arrIndex = algoSpecificData.freeStackTop -1;
+			do {
+				SIZE_T addrIndex = arrIndex * 2;
+				SIZE_T capacity = algoSpecificData.mFreeStackBase[addrIndex + 1];
+				SIZE_T capacityAfterHeader = capacity - sizeof(RoutedBlockHeader);
+				if (capacityAfterHeader < requiredSize) {
+					arrIndex -= 1;
+					continue;
+				}
+				uintptr_t rawAddress = algoSpecificData.mFreeStackBase[addrIndex];
+				RoutedBlockHeader* currentBlock = reinterpret_cast<RoutedBlockHeader*>(rawAddress);
 				uintptr_t addrSlot = rawAddress + sizeof(SIZE_T);
 				uintptr_t aligned = Align(addrSlot, alignof(DataType));
 				SIZE_T offset = static_cast<SIZE_T>(aligned - rawAddress);
 				SIZE_T usedSize = Align(offset + requiredSize, alignof(RoutedBlockHeader));
 				if (usedSize > currentBlock->size) {
-					previousBlock = currentBlock;
-					currentBlock = currentBlock->next;
+					arrIndex -= 1;
 					continue;
 				}
 
@@ -155,9 +168,9 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 					if (sizeExceed == 0)
 						break;
 				}
-			}
-			previousBlock = currentBlock;
-			currentBlock = currentBlock->next;
+
+				arrIndex -= 1;
+			} while (arrIndex >= 0);
 		}
 
 		if (std::get<0>(bestBlock)) {

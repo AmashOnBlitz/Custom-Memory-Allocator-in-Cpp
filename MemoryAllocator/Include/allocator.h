@@ -5,7 +5,6 @@
 #include <vector>
 #include <utility>
 
-#define ENFORCE_ALLOCATOR_CHECKS
 #if defined(_DEBUG) || defined(ENFORCE_ALLOCATOR_CHECKS)
 #define ALLOCATOR_ENABLE_BITMAP 1
 #else
@@ -22,7 +21,6 @@ namespace StandardMemoryUnits {
 // Link Prev adds additional 8 bytes to memory block header (which becomes 24 + 8 = 32 bytes)
 // Search From Head searches linearly from head list to prev list so O(n)
 // Link Prev takes less time while Search from Head wastes less memory
-// On 10k allocations test, LinkPrev was approx 36.8% fast (64 bit Windows)
 // Fixed size eliminates block header but you can only store same data type (or more
 // specifically data types of same size and alignment) in it.
 enum class CoalesceAlgorithm {
@@ -56,7 +54,11 @@ struct BlockHeader<CoalesceAlgorithm::LinkPrevious> {
 
 template<CoalesceAlgorithm Algo>
 struct AlgoSpecificData {
-
+	SIZE_T maxAllocations = 0;
+	void* mFreeStackArena = nullptr; // Addr -> capacity -> Addr -> capacity
+	// storing whole mem capacity, doesnt excl alignment or header
+	SIZE_T* mFreeStackBase = nullptr;
+	SIZE_T freeStackTop = 0;
 };
 
 template<>
@@ -80,6 +82,8 @@ struct AlgoSpecificData<CoalesceAlgorithm::FixedSize_NoHeader> {
 	SIZE_T freeStackTop = 0;
 };
 
+//using CompressedSIZE_T = uint32_t; // Max alloc per allocator instance should be < 4 GB bcz of this
+
 template<CoalesceAlgorithm CoalesceAlgo>
 class Allocator
 {
@@ -100,7 +104,8 @@ public:
 
 private:
 	uintptr_t Align(uintptr_t rawAddr, uintptr_t alignment); // uintptr_t to do int maths on pointer 
-
+	CompressedSIZE_T CompressSize_T(SIZE_T size);
+	SIZE_T DecompressSize_T(CompressedSIZE_T size);
 private:
 	void* mMemoryArena;
 	UINT8* mBase; //UINT cuz its pointer to individual bytes (in this case base of mem i.e 0x100)

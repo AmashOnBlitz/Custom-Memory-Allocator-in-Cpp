@@ -194,6 +194,18 @@ uintptr_t Allocator<CoalesceAlgo>::Align(uintptr_t rawAddr, uintptr_t alignment)
 	return uintptr_t((rawAddr + alignment - 1) & ~(alignment - 1));
 }
 
+//template<CoalesceAlgorithm CoalesceAlgo>
+//CompressedSIZE_T Allocator<CoalesceAlgo>::CompressSize_T(SIZE_T size)
+//{
+//	return static_cast<CompressedSIZE_T>(size);
+//}
+//
+//template<CoalesceAlgorithm CoalesceAlgo>
+//SIZE_T Allocator<CoalesceAlgo>::DecompressSize_T(CompressedSIZE_T size)
+//{
+//	return static_cast<SIZE_T>(size);
+//}
+
 template class Allocator<CoalesceAlgorithm::LinkPrevious>;
 template class Allocator<CoalesceAlgorithm::SearchFromHead>;
 template class Allocator<CoalesceAlgorithm::FixedSize_NoHeader>;
