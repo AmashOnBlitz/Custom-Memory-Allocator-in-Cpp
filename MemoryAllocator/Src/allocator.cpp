@@ -38,11 +38,7 @@ Allocator<CoalesceAlgo>::~Allocator()
 			algoSpecificData.mMetaDataBase = nullptr;
 		}
 		if (algoSpecificData.mFreeStackArena) {
-			::VirtualFree(
-				algoSpecificData.mFreeStackArena,
-				0,
-				MEM_RELEASE
-			);
+			::FreeMemory(algoSpecificData.mFreeStackArena, 0);
 			algoSpecificData.mFreeStackArena = nullptr;
 			algoSpecificData.mFreeStackBase = nullptr;
 		}

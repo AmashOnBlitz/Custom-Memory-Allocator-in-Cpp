@@ -51,12 +51,7 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 			// Reserve the free-slot stack: worst case every slot gets freed at once,
 			// so it must hold up to maxAllocations indices.
 			SIZE_T freeStackCapacity = algoSpecificData.maxAllocations * sizeof(SIZE_T);
-			algoSpecificData.mFreeStackArena = ::VirtualAlloc(
-				nullptr,
-				freeStackCapacity,
-				MEM_COMMIT | MEM_RESERVE,
-				PAGE_READWRITE
-			);
+			algoSpecificData.mFreeStackArena = ::AllocateMemory(nullptr, freeStackCapacity);
 
 			if (!algoSpecificData.mFreeStackArena)
 				throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Cannot prepare arena to allocate memory"));
