@@ -329,6 +329,7 @@ void RunAllAlgoComparisionBenchmark()
 	print("\nTotal header memory tax -- heavy use (" << allocationCount << " allocations):");
 	print("  LinkPrevious:   " << (sizeof(BlockHeader<CoalesceAlgorithm::LinkPrevious>) * allocationCount) / (double)StandardMemoryUnits::MB << " MB");
 	print("  SearchFromHead: " << (sizeof(BlockHeader<CoalesceAlgorithm::SearchFromHead>) * allocationCount) / (double)StandardMemoryUnits::MB << " MB");
+	print("  FixedSize_NoHeader: " << ((1/8) * allocationCount) / (double)StandardMemoryUnits::MB << " MB");
 	print("\nNote: CPP_Default (malloc) header overhead is implementation-defined and not directly measurable, so it's excluded from the memory tax comparison above.");
 	print("Also FixedSize_NoHeader uses 1 bit of memory per alloc in external bitmap metadata, no in memory header");
 

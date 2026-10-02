@@ -15,7 +15,6 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 {
 	if (requiredSize == 0)
 		throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Cannot Allocate 0 bytes"));
-
 	if constexpr (CoalesceAlgo == CoalesceAlgorithm::FixedSize_NoHeader) {
 		bool& isFirstit = algoSpecificData.isFirstit;
 		if (isFirstit) {
@@ -48,6 +47,21 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 				throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Cannot prepare arena to allocate memory"));
 
 			algoSpecificData.mMetaDataBase = static_cast<UINT8*>(algoSpecificData.mMemoryMetaDataArena);
+
+			// Reserve the free-slot stack: worst case every slot gets freed at once,
+			// so it must hold up to maxAllocations indices.
+			SIZE_T freeStackCapacity = algoSpecificData.maxAllocations * sizeof(SIZE_T);
+			algoSpecificData.mFreeStackArena = ::VirtualAlloc(
+				nullptr,
+				freeStackCapacity,
+				MEM_COMMIT | MEM_RESERVE,
+				PAGE_READWRITE
+			);
+
+			if (!algoSpecificData.mFreeStackArena)
+				throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Cannot prepare arena to allocate memory"));
+
+			algoSpecificData.mFreeStackBase = static_cast<SIZE_T*>(algoSpecificData.mFreeStackArena);
 		}
 		else {
 			SIZE_T slotSize;
@@ -63,28 +77,25 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 				slotSize != algoSpecificData.slotSize
 				)
 				throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Trying to allocate memory to different data types!\n \
-																through FixedSize algorithm"));
+															through FixedSize algorithm"));
+		}
+
+		// O(1) reuse path: pop a freed slot instead of scanning the bitmap.
+		if (algoSpecificData.freeStackTop > 0) {
+			SIZE_T i = algoSpecificData.mFreeStackBase[--algoSpecificData.freeStackTop];
+
+			SIZE_T byteIndex = i / 8;
+			UINT8 bitMask = static_cast<UINT8>(1u << (i % 8));
+			algoSpecificData.mMetaDataBase[byteIndex] |= bitMask;
+
+			void* mem = reinterpret_cast<void*>(mBase + algoSpecificData.memPrefixAlignment + i * algoSpecificData.slotSize);
+			RETURN_CONSTRUCTED_MEMORY(DataType, mem);
 		}
 
 		SIZE_T& buffer = algoSpecificData.buffer;
 		uintptr_t freeAddr = reinterpret_cast<uintptr_t>(mBase) + buffer;
 		freeAddr = Align(freeAddr, alignof(DataType));
 		SIZE_T alignedBuff = (freeAddr - reinterpret_cast<uintptr_t>(mBase)) + algoSpecificData.slotSize;
-		SIZE_T& allocationIt = algoSpecificData.allocationIt;
-		for (SIZE_T byteIndex = 0; byteIndex < (allocationIt + 7) / 8; byteIndex++) {
-			UINT8 byte = algoSpecificData.mMetaDataBase[byteIndex];
-			if (byte == 0xFF)
-				continue;
-			SIZE_T bit = std::countr_zero(static_cast<unsigned>(~byte));
-			SIZE_T i = byteIndex * 8 + bit;
-
-			if (i < allocationIt) {
-				UINT8 bitMask = static_cast<UINT8>(1u << bit);
-				algoSpecificData.mMetaDataBase[byteIndex] |= bitMask;
-				void* mem = reinterpret_cast<void*>(mBase + algoSpecificData.memPrefixAlignment + i * algoSpecificData.slotSize);
-				RETURN_CONSTRUCTED_MEMORY(DataType, mem);
-			}
-		}
 
 		if (alignedBuff > mArenaCapacity)
 			throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Arena too small to allocate"));

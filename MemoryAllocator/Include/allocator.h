@@ -64,6 +64,10 @@ struct AlgoSpecificData<CoalesceAlgorithm::FixedSize_NoHeader> {
 	// Convention Used: bit == 1 will be used and bit == 0 will be free
 	void* mMemoryMetaDataArena = nullptr;
 	UINT8* mMetaDataBase = nullptr;
+	// Convention Used : freeStackTop == count of currently reusable slots
+	void* mFreeStackArena = nullptr;
+	SIZE_T* mFreeStackBase = nullptr;
+	SIZE_T freeStackTop = 0;
 };
 
 template<CoalesceAlgorithm CoalesceAlgo>
