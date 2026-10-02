@@ -4,7 +4,6 @@
 #include <Windows.h>
 #endif 
 
-
 #if defined(__linux__) || defined(__APPLE__)
 #include <cstddef>
 #include <cstdint>
