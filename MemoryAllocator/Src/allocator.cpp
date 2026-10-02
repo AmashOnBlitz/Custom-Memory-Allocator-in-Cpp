@@ -32,11 +32,13 @@ Allocator<CoalesceAlgo>::~Allocator()
 		mBase = nullptr;
 	}
 	if constexpr (CoalesceAlgo == CoalesceAlgorithm::FixedSize_NoHeader) {
+#if ALLOCATOR_ENABLE_BITMAP
 		if (algoSpecificData.mMemoryMetaDataArena) {
 			::FreeMemory(algoSpecificData.mMemoryMetaDataArena, 0);
 			algoSpecificData.mMemoryMetaDataArena = nullptr;
 			algoSpecificData.mMetaDataBase = nullptr;
 		}
+#endif
 		if (algoSpecificData.mFreeStackArena) {
 			::FreeMemory(algoSpecificData.mFreeStackArena, 0);
 			algoSpecificData.mFreeStackArena = nullptr;
@@ -62,11 +64,13 @@ void Allocator<CoalesceAlgo>::Deallocate(void* memory)
 		if (index >= algoSpecificData.allocationIt)
 			throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Invalid memory address"));
 
+#if ALLOCATOR_ENABLE_BITMAP
 		SIZE_T byteIndex = index / 8;
 		UINT8 bitMask = static_cast<UINT8>(1u << (index % 8));
 		if ((algoSpecificData.mMetaDataBase[byteIndex] & bitMask) == 0)
 			throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Cannot Deallocate/Free already free memory"));
 		algoSpecificData.mMetaDataBase[byteIndex] &= static_cast<UINT8>(~bitMask);
+#endif
 
 		algoSpecificData.mFreeStackBase[algoSpecificData.freeStackTop++] = index;
 	}
@@ -134,11 +138,12 @@ std::string Allocator<CoalesceAlgo>::DebugBlocks()
 	std::string debugStr = "";
 
 	if constexpr (CoalesceAlgo == CoalesceAlgorithm::FixedSize_NoHeader) {
-		if (!algoSpecificData.mMetaDataBase) return debugStr;
+		if (!algoSpecificData.mFreeStackBase) return debugStr;
+		std::vector<bool> isBlockFree(algoSpecificData.allocationIt, false);
+		for (SIZE_T s = 0; s < algoSpecificData.freeStackTop; s++)
+			isBlockFree[algoSpecificData.mFreeStackBase[s]] = true;
 		for (SIZE_T i = 0; i < algoSpecificData.allocationIt; i++) {
-			SIZE_T byteIndex = i / 8;
-			UINT8 bitMask = static_cast<UINT8>(1u << (i % 8));
-			bool isFree = (algoSpecificData.mMetaDataBase[byteIndex] & bitMask) == 0;
+			bool isFree = isBlockFree[i];
 			uintptr_t currentBlock = reinterpret_cast<uintptr_t>(
 				mBase + algoSpecificData.memPrefixAlignment + i * algoSpecificData.slotSize);
 

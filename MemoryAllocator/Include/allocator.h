@@ -5,6 +5,14 @@
 #include <vector>
 #include <utility>
 
+#define ENFORCE_ALLOCATOR_CHECKS
+#if defined(_DEBUG) || defined(ENFORCE_ALLOCATOR_CHECKS)
+#define ALLOCATOR_ENABLE_BITMAP 1
+#else
+#define ALLOCATOR_ENABLE_BITMAP 0
+#endif
+
+
 namespace StandardMemoryUnits {
 	constexpr size_t B = 1;
 	constexpr size_t KB = B * 1024;
@@ -61,9 +69,11 @@ struct AlgoSpecificData<CoalesceAlgorithm::FixedSize_NoHeader> {
 	SIZE_T memPrefixAlignment = 0;
 	SIZE_T maxAllocations = 0;
 	bool isFirstit = true;
+#if ALLOCATOR_ENABLE_BITMAP
 	// Convention Used: bit == 1 will be used and bit == 0 will be free
 	void* mMemoryMetaDataArena = nullptr;
 	UINT8* mMetaDataBase = nullptr;
+#endif
 	// Convention Used : freeStackTop == count of currently reusable slots
 	void* mFreeStackArena = nullptr;
 	SIZE_T* mFreeStackBase = nullptr;

@@ -21,8 +21,6 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 			algoSpecificData.alignment = alignof(DataType);
 			algoSpecificData.size = sizeof(DataType);
 
-			// If align is big, always return aligned mem and if size is big then return size
-			// to avoid further align() after first align()
 			if (alignof(DataType) > sizeof(DataType)) {
 				algoSpecificData.slotSize = alignof(DataType);
 			}
@@ -40,6 +38,8 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 				throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Arena too small to allocate"));
 			algoSpecificData.memPrefixAlignment = alignedBuff;
 			algoSpecificData.maxAllocations = (mArenaCapacity - alignedBuff) / algoSpecificData.slotSize;
+
+#if ALLOCATOR_ENABLE_BITMAP
 			SIZE_T metaDataArenaCapacity = (algoSpecificData.maxAllocations + 7) / 8;
 			algoSpecificData.mMemoryMetaDataArena = ::AllocateMemory(nullptr, metaDataArenaCapacity);
 
@@ -47,9 +47,7 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 				throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Cannot prepare arena to allocate memory"));
 
 			algoSpecificData.mMetaDataBase = static_cast<UINT8*>(algoSpecificData.mMemoryMetaDataArena);
-
-			// Reserve the free-slot stack: worst case every slot gets freed at once,
-			// so it must hold up to maxAllocations indices.
+#endif
 			SIZE_T freeStackCapacity = algoSpecificData.maxAllocations * sizeof(SIZE_T);
 			algoSpecificData.mFreeStackArena = ::AllocateMemory(nullptr, freeStackCapacity);
 
@@ -75,14 +73,12 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 															through FixedSize algorithm"));
 		}
 
-		// O(1) reuse path: pop a freed slot instead of scanning the bitmap.
 		if (algoSpecificData.freeStackTop > 0) {
 			SIZE_T i = algoSpecificData.mFreeStackBase[--algoSpecificData.freeStackTop];
 
-			SIZE_T byteIndex = i / 8;
-			UINT8 bitMask = static_cast<UINT8>(1u << (i % 8));
-			algoSpecificData.mMetaDataBase[byteIndex] |= bitMask;
-
+#if ALLOCATOR_ENABLE_BITMAP
+			algoSpecificData.mMetaDataBase[i / 8] |= static_cast<UINT8>(1u << (i % 8));
+#endif
 			void* mem = reinterpret_cast<void*>(mBase + algoSpecificData.memPrefixAlignment + i * algoSpecificData.slotSize);
 			RETURN_CONSTRUCTED_MEMORY(DataType, mem);
 		}
@@ -99,9 +95,11 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 
 		buffer = alignedBuff;
 
+#if ALLOCATOR_ENABLE_BITMAP
 		SIZE_T byteIndex = algoSpecificData.allocationIt / 8;
 		UINT8 bitMask = static_cast<UINT8>(1u << (algoSpecificData.allocationIt % 8));
 		algoSpecificData.mMetaDataBase[byteIndex] |= bitMask;
+#endif
 
 		algoSpecificData.allocationIt += 1;
 		RETURN_CONSTRUCTED_MEMORY(DataType, reinterpret_cast<void*>(freeAddr));
