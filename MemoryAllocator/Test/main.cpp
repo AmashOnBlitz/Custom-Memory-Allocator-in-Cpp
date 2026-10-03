@@ -5,5 +5,6 @@
 int main(int argc, char** argv)
 {
 	RunAllAlgoComparisionBenchmark();
+	RunMixedTypeComparisionBenchmark();
 	return 0;
 }

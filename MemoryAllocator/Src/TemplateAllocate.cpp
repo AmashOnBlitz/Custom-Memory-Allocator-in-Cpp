@@ -114,6 +114,8 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 			mAlgoSpecificData.maxAllocations = mArenaCapacity / (sizeof(RoutedBlockHeader) + 1);
 			SIZE_T freeStackCapacity = (mAlgoSpecificData.maxAllocations * 2) * sizeof(SIZE_T);
 			mAlgoSpecificData.mFreeStackArena = ::AllocateMemory(nullptr, freeStackCapacity);
+			if (!mAlgoSpecificData.mFreeStackArena)
+				throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Cannot prepare arena to allocate memory"));
 			isFirstit = !isFirstit;
 			mAlgoSpecificData.mFreeStackBase = static_cast<SIZE_T*>(mAlgoSpecificData.mFreeStackArena);
 		}
@@ -135,6 +137,7 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 			mHeadMemBlock->next = nullptr;
 			if constexpr (CoalesceAlgo == CoalesceAlgorithm::LinkPrevious)
 				mHeadMemBlock->prev = nullptr;
+			mTailMemBlock = mHeadMemBlock;
 			SIZE_T* slot = reinterpret_cast<SIZE_T*>(aligned - sizeof(SIZE_T));
 			*slot = offset;
 
@@ -163,7 +166,7 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 			SIZE_T sizeExceed = currentBlock->size - usedSize;
 			if (std::get<0>(bestBlock) == nullptr || sizeExceed < std::get<1>(bestBlock)) {
 				bestBlock = { currentBlock, sizeExceed, offset };
-				if (sizeExceed == 0)
+				if (sizeExceed < sizeof(RoutedBlockHeader) + 1)
 					break;
 			}
 		}
@@ -178,7 +181,7 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 				if (remaining >= sizeof(RoutedBlockHeader) + 1) {
 					RoutedBlockHeader* oldNext = std::get<0>(bestBlock)->next;
 					std::get<0>(bestBlock)->size = usedSize;
-					UINT8* newBlockArea = reinterpret_cast<UINT8*>(std::get<0>(bestBlock) + 1) + std::get<0>(bestBlock)->size;
+					UINT8* newBlockArea = reinterpret_cast<UINT8*>(std::get<0>(bestBlock) + 1) + usedSize;
 					RoutedBlockHeader* newBlock = reinterpret_cast<RoutedBlockHeader*>(newBlockArea);
 					newBlock->free = true;
 					newBlock->size = remaining - sizeof(RoutedBlockHeader);
@@ -188,6 +191,8 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 						if (oldNext)
 							oldNext->prev = newBlock;
 					}
+					if (!oldNext)
+						mTailMemBlock = newBlock;
 					std::get<0>(bestBlock)->next = newBlock;
 					PushFreeEntry(newBlock);
 				}
@@ -201,10 +206,7 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 			RETURN_CONSTRUCTED_MEMORY(DataType, reinterpret_cast<void*>(aligned));
 		}
 
-		RoutedBlockHeader* previousBlock = mHeadMemBlock;
-		while (previousBlock->next)
-			previousBlock = previousBlock->next;
-
+		RoutedBlockHeader* previousBlock = mTailMemBlock;
 		UINT8* arenaEnd = reinterpret_cast<UINT8*>(mBase) + mArenaCapacity;
 		UINT8* newBlockArea = reinterpret_cast<UINT8*>(previousBlock + 1) + previousBlock->size;
 
@@ -224,6 +226,7 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 					newBlock->prev = previousBlock;
 
 				previousBlock->next = newBlock;
+				mTailMemBlock = newBlock;
 				*reinterpret_cast<SIZE_T*>(aligned - sizeof(SIZE_T)) = offset;
 
 				RETURN_CONSTRUCTED_MEMORY(DataType, reinterpret_cast<void*>(aligned));

@@ -10,7 +10,8 @@ template<CoalesceAlgorithm CoalesceAlgo>
 Allocator<CoalesceAlgo>::Allocator(SIZE_T arenaSize) :
 	mMemoryArena(nullptr),
 	mArenaCapacity(arenaSize),
-	mHeadMemBlock(nullptr)
+	mHeadMemBlock(nullptr),
+	mTailMemBlock(nullptr)
 {
 	if (mArenaCapacity == 0)
 		throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Cannot Reserve 0 bytes"));
@@ -109,25 +110,24 @@ void Allocator<CoalesceAlgo>::Deallocate(void* memory)
 		if (prev && prev->free) {
 			RemoveFreeEntry(prev);
 			prev->size += (block->size + sizeof(RoutedBlockHeader));
-			prev->next = block->next;
-			prev->free = true;
+			prev->next = nxt;
 			backCoalescedBlock = prev;
-			if constexpr (CoalesceAlgo == CoalesceAlgorithm::LinkPrevious) {
-				if (backCoalescedBlock->next)
-					backCoalescedBlock->next->prev = prev;
-			}
 		}
 
 		if (nxt && nxt->free) {
 			RemoveFreeEntry(nxt);
 			backCoalescedBlock->size += (nxt->size + sizeof(RoutedBlockHeader));
-			backCoalescedBlock->free = true;
 			backCoalescedBlock->next = nxt->next;
-			if constexpr (CoalesceAlgo == CoalesceAlgorithm::LinkPrevious) {
-				if (backCoalescedBlock->next)
-					backCoalescedBlock->next->prev = backCoalescedBlock;
-			}
 		}
+
+		if (backCoalescedBlock->next) {
+			if constexpr (CoalesceAlgo == CoalesceAlgorithm::LinkPrevious)
+				backCoalescedBlock->next->prev = backCoalescedBlock;
+		}
+		else {
+			mTailMemBlock = backCoalescedBlock;
+		}
+
 		PushFreeEntry(backCoalescedBlock);
 	}
 }
@@ -204,19 +204,20 @@ void Allocator<CoalesceAlgo>::PushFreeEntry(RoutedBlockHeader* b) {
 	auto& d = mAlgoSpecificData;
 	d.mFreeStackBase[d.freeStackTop * 2] = reinterpret_cast<uintptr_t>(b);
 	d.mFreeStackBase[d.freeStackTop * 2 + 1] = b->size + sizeof(RoutedBlockHeader);
+	b->freeIndex = static_cast<uint32_t>(d.freeStackTop);
 	d.freeStackTop++;
 }
 
 template<CoalesceAlgorithm CoalesceAlgo>
 void Allocator<CoalesceAlgo>::RemoveFreeEntry(RoutedBlockHeader* b) {
 	auto& d = mAlgoSpecificData;
-	for (SIZE_T i = 0; i < d.freeStackTop; ++i) {
-		if (d.mFreeStackBase[i * 2] == reinterpret_cast<uintptr_t>(b)) {
-			SIZE_T last = --d.freeStackTop;
-			d.mFreeStackBase[i * 2] = d.mFreeStackBase[last * 2];
-			d.mFreeStackBase[i * 2 + 1] = d.mFreeStackBase[last * 2 + 1];
-			return;
-		}
+	SIZE_T i = b->freeIndex;
+	SIZE_T last = --d.freeStackTop;
+	if (i != last) {
+		d.mFreeStackBase[i * 2] = d.mFreeStackBase[last * 2];
+		d.mFreeStackBase[i * 2 + 1] = d.mFreeStackBase[last * 2 + 1];
+		RoutedBlockHeader* moved = reinterpret_cast<RoutedBlockHeader*>(d.mFreeStackBase[i * 2]);
+		moved->freeIndex = static_cast<uint32_t>(i);
 	}
 }
 

@@ -39,6 +39,9 @@ template <CoalesceAlgorithm CoalesceAlgo>
 struct BlockHeader {
 	SIZE_T size;
 	bool free;
+	uint32_t freeIndex; // doesnt take any more mem as it fits in internal frag 
+	// NOTE: keep this after bool free so that it fits in the internal frag b/w
+	// bool free and BlockHeader* next;
 	BlockHeader* next;
 	//SIZE_T alignmentOffset;
 };
@@ -50,7 +53,15 @@ struct BlockHeader<CoalesceAlgorithm::LinkPrevious> {
 	BlockHeader* next;
 	BlockHeader* prev;
 	//SIZE_T alignmentOffset;
+	uint32_t freeIndex;
 };
+
+
+/*
+note before signing off: when you place uint32_t freeIndex; at last of struct the speed dramatically increases
+by ~ 10 to 15 times and header increases by 8 bytes but if we place it in internal frag b/w bool free; and 
+BlockHeader* next; the struct size doesnt increase and speed decreases around ~ 10 to 15 times (back to base speed)
+*/
 
 template<CoalesceAlgorithm Algo>
 struct AlgoSpecificData {
@@ -115,6 +126,7 @@ private:
 	UINT8* mBase; //UINT cuz its pointer to individual bytes (in this case base of mem i.e 0x100)
 	SIZE_T mArenaCapacity;
 	RoutedBlockHeader* mHeadMemBlock;
+	RoutedBlockHeader* mTailMemBlock; // referring to last mem block
 	AlgoSpecificData<CoalesceAlgo> mAlgoSpecificData;
 };
 
