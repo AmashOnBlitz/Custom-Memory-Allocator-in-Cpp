@@ -58,6 +58,7 @@ struct AlgoSpecificData {
 	void* mFreeStackArena = nullptr; // Addr -> capacity -> Addr -> capacity
 	// storing whole mem capacity, doesnt excl alignment or header
 	SIZE_T* mFreeStackBase = nullptr;
+	bool isFirstit = true;
 	SIZE_T freeStackTop = 0;
 };
 
@@ -83,6 +84,7 @@ struct AlgoSpecificData<CoalesceAlgorithm::FixedSize_NoHeader> {
 };
 
 //using CompressedSIZE_T = uint32_t; // Max alloc per allocator instance should be < 4 GB bcz of this
+static constexpr SIZE_T kNoEntry = static_cast<SIZE_T>(-1);
 
 template<CoalesceAlgorithm CoalesceAlgo>
 class Allocator
@@ -104,14 +106,16 @@ public:
 
 private:
 	uintptr_t Align(uintptr_t rawAddr, uintptr_t alignment); // uintptr_t to do int maths on pointer 
-	CompressedSIZE_T CompressSize_T(SIZE_T size);
-	SIZE_T DecompressSize_T(CompressedSIZE_T size);
+	void PushFreeEntry(RoutedBlockHeader* b);
+	void RemoveFreeEntry(RoutedBlockHeader* b);
+	//CompressedSIZE_T CompressSize_T(SIZE_T size);
+	//SIZE_T DecompressSize_T(CompressedSIZE_T size);
 private:
 	void* mMemoryArena;
 	UINT8* mBase; //UINT cuz its pointer to individual bytes (in this case base of mem i.e 0x100)
 	SIZE_T mArenaCapacity;
 	RoutedBlockHeader* mHeadMemBlock;
-	AlgoSpecificData<CoalesceAlgo> algoSpecificData;
+	AlgoSpecificData<CoalesceAlgo> mAlgoSpecificData;
 };
 
 #include "../Src/TemplateAllocate.cpp"

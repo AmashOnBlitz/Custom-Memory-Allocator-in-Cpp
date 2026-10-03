@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include <string>
 #include <bit> //reason for min support C++ 20
+#include <tuple>
 
 #define MSG_PREFIX "[Allocator]"
 #define BUILD_RUNTIME_ERR_MSG(err) MSG_PREFIX + std::string("Error:") + std::string(err)
@@ -16,45 +17,45 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 	if (requiredSize == 0)
 		throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Cannot Allocate 0 bytes"));
 	if constexpr (CoalesceAlgo == CoalesceAlgorithm::FixedSize_NoHeader) {
-		bool& isFirstit = algoSpecificData.isFirstit;
+		bool& isFirstit = mAlgoSpecificData.isFirstit;
 		if (isFirstit) {
-			algoSpecificData.alignment = alignof(DataType);
-			algoSpecificData.size = sizeof(DataType);
+			mAlgoSpecificData.alignment = alignof(DataType);
+			mAlgoSpecificData.size = sizeof(DataType);
 
 			if (alignof(DataType) > sizeof(DataType)) {
-				algoSpecificData.slotSize = alignof(DataType);
+				mAlgoSpecificData.slotSize = alignof(DataType);
 			}
 			else {
-				algoSpecificData.slotSize = sizeof(DataType);
+				mAlgoSpecificData.slotSize = sizeof(DataType);
 			}
 
 			isFirstit = !isFirstit;
 
-			SIZE_T& buffer = algoSpecificData.buffer;
+			SIZE_T& buffer = mAlgoSpecificData.buffer;
 			uintptr_t freeAddr = reinterpret_cast<uintptr_t>(mBase) + buffer;;
 			freeAddr = Align(freeAddr, alignof(DataType));
 			SIZE_T alignedBuff = (freeAddr - reinterpret_cast<uintptr_t>(mBase));
 			if (alignedBuff >= mArenaCapacity)
 				throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Arena too small to allocate"));
-			algoSpecificData.memPrefixAlignment = alignedBuff;
-			algoSpecificData.maxAllocations = (mArenaCapacity - alignedBuff) / algoSpecificData.slotSize;
+			mAlgoSpecificData.memPrefixAlignment = alignedBuff;
+			mAlgoSpecificData.maxAllocations = (mArenaCapacity - alignedBuff) / mAlgoSpecificData.slotSize;
 
 #if ALLOCATOR_ENABLE_BITMAP
-			SIZE_T metaDataArenaCapacity = (algoSpecificData.maxAllocations + 7) / 8;
-			algoSpecificData.mMemoryMetaDataArena = ::AllocateMemory(nullptr, metaDataArenaCapacity);
+			SIZE_T metaDataArenaCapacity = (mAlgoSpecificData.maxAllocations + 7) / 8;
+			mAlgoSpecificData.mMemoryMetaDataArena = ::AllocateMemory(nullptr, metaDataArenaCapacity);
 
-			if (!algoSpecificData.mMemoryMetaDataArena)
+			if (!mAlgoSpecificData.mMemoryMetaDataArena)
 				throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Cannot prepare arena to allocate memory"));
 
-			algoSpecificData.mMetaDataBase = static_cast<UINT8*>(algoSpecificData.mMemoryMetaDataArena);
+			mAlgoSpecificData.mMetaDataBase = static_cast<UINT8*>(mAlgoSpecificData.mMemoryMetaDataArena);
 #endif
-			SIZE_T freeStackCapacity = algoSpecificData.maxAllocations * sizeof(SIZE_T);
-			algoSpecificData.mFreeStackArena = ::AllocateMemory(nullptr, freeStackCapacity);
+			SIZE_T freeStackCapacity = mAlgoSpecificData.maxAllocations * sizeof(SIZE_T);
+			mAlgoSpecificData.mFreeStackArena = ::AllocateMemory(nullptr, freeStackCapacity);
 
-			if (!algoSpecificData.mFreeStackArena)
+			if (!mAlgoSpecificData.mFreeStackArena)
 				throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Cannot prepare arena to allocate memory"));
 
-			algoSpecificData.mFreeStackBase = static_cast<SIZE_T*>(algoSpecificData.mFreeStackArena);
+			mAlgoSpecificData.mFreeStackBase = static_cast<SIZE_T*>(mAlgoSpecificData.mFreeStackArena);
 		}
 		else {
 			SIZE_T slotSize;
@@ -65,56 +66,56 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 				slotSize = sizeof(DataType);
 			}
 
-			if (alignof(DataType) != algoSpecificData.alignment ||
-				sizeof(DataType) != algoSpecificData.size ||
-				slotSize != algoSpecificData.slotSize
+			if (alignof(DataType) != mAlgoSpecificData.alignment ||
+				sizeof(DataType) != mAlgoSpecificData.size ||
+				slotSize != mAlgoSpecificData.slotSize
 				)
 				throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Trying to allocate memory to different data types!\n \
 															through FixedSize algorithm"));
 		}
 
-		if (algoSpecificData.freeStackTop > 0) {
-			SIZE_T i = algoSpecificData.mFreeStackBase[--algoSpecificData.freeStackTop];
+		if (mAlgoSpecificData.freeStackTop > 0) {
+			SIZE_T i = mAlgoSpecificData.mFreeStackBase[--mAlgoSpecificData.freeStackTop];
 
 #if ALLOCATOR_ENABLE_BITMAP
-			algoSpecificData.mMetaDataBase[i / 8] |= static_cast<UINT8>(1u << (i % 8));
+			mAlgoSpecificData.mMetaDataBase[i / 8] |= static_cast<UINT8>(1u << (i % 8));
 #endif
-			void* mem = reinterpret_cast<void*>(mBase + algoSpecificData.memPrefixAlignment + i * algoSpecificData.slotSize);
+			void* mem = reinterpret_cast<void*>(mBase + mAlgoSpecificData.memPrefixAlignment + i * mAlgoSpecificData.slotSize);
 			RETURN_CONSTRUCTED_MEMORY(DataType, mem);
 		}
 
-		SIZE_T& buffer = algoSpecificData.buffer;
+		SIZE_T& buffer = mAlgoSpecificData.buffer;
 		uintptr_t freeAddr = reinterpret_cast<uintptr_t>(mBase) + buffer;
 		freeAddr = Align(freeAddr, alignof(DataType));
-		SIZE_T alignedBuff = (freeAddr - reinterpret_cast<uintptr_t>(mBase)) + algoSpecificData.slotSize;
+		SIZE_T alignedBuff = (freeAddr - reinterpret_cast<uintptr_t>(mBase)) + mAlgoSpecificData.slotSize;
 
 		if (alignedBuff > mArenaCapacity)
 			throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Arena too small to allocate"));
-		if (algoSpecificData.allocationIt >= algoSpecificData.maxAllocations)
+		if (mAlgoSpecificData.allocationIt >= mAlgoSpecificData.maxAllocations)
 			throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Arena too small to allocate"));
 
 		buffer = alignedBuff;
 
 #if ALLOCATOR_ENABLE_BITMAP
-		SIZE_T byteIndex = algoSpecificData.allocationIt / 8;
-		UINT8 bitMask = static_cast<UINT8>(1u << (algoSpecificData.allocationIt % 8));
-		algoSpecificData.mMetaDataBase[byteIndex] |= bitMask;
+		SIZE_T byteIndex = mAlgoSpecificData.allocationIt / 8;
+		UINT8 bitMask = static_cast<UINT8>(1u << (mAlgoSpecificData.allocationIt % 8));
+		mAlgoSpecificData.mMetaDataBase[byteIndex] |= bitMask;
 #endif
 
-		algoSpecificData.allocationIt += 1;
+		mAlgoSpecificData.allocationIt += 1;
 		RETURN_CONSTRUCTED_MEMORY(DataType, reinterpret_cast<void*>(freeAddr));
 	}
 	else {
 		if (mArenaCapacity < sizeof(RoutedBlockHeader) || requiredSize >(mArenaCapacity - sizeof(RoutedBlockHeader)))
 			throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Arena too small to allocate"));
 
-		bool& isFirstit = algoSpecificData.isFirstit;
+		bool& isFirstit = mAlgoSpecificData.isFirstit;
 		if (isFirstit) {
-			algoSpecificData.maxAllocations = mArenaCapacity / (sizeof(RoutedBlockHeader) + 1);
-			SIZE_T freeStackCapacity = (algoSpecificData.maxAllocations * 2) * sizeof(SIZE_T);
-			algoSpecificData.mFreeStackArena = ::AllocateMemory(nullptr, freeStackCapacity);
+			mAlgoSpecificData.maxAllocations = mArenaCapacity / (sizeof(RoutedBlockHeader) + 1);
+			SIZE_T freeStackCapacity = (mAlgoSpecificData.maxAllocations * 2) * sizeof(SIZE_T);
+			mAlgoSpecificData.mFreeStackArena = ::AllocateMemory(nullptr, freeStackCapacity);
 			isFirstit = !isFirstit;
-			algoSpecificData.mFreeStackBase = static_cast<SIZE_T*>(algoSpecificData.mFreeStackArena);
+			mAlgoSpecificData.mFreeStackBase = static_cast<SIZE_T*>(mAlgoSpecificData.mFreeStackArena);
 		}
 
 		if (!mHeadMemBlock) {
@@ -124,11 +125,12 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 			uintptr_t addrSlot = rawAddress + sizeof(SIZE_T);
 			uintptr_t aligned = Align(addrSlot, alignof(DataType));
 			SIZE_T offset = static_cast<SIZE_T>(aligned - rawAddress);
+			SIZE_T blockSize = Align(offset + requiredSize, alignof(RoutedBlockHeader));
 
-			if (mArenaCapacity - sizeof(RoutedBlockHeader) < requiredSize + offset)
+			if (mArenaCapacity - sizeof(RoutedBlockHeader) < blockSize)
 				throw std::runtime_error(BUILD_RUNTIME_ERR_MSG("Arena to small to allocate"));
 
-			mHeadMemBlock->size = requiredSize + offset;
+			mHeadMemBlock->size = blockSize;
 			mHeadMemBlock->free = false;
 			mHeadMemBlock->next = nullptr;
 			if constexpr (CoalesceAlgo == CoalesceAlgorithm::LinkPrevious)
@@ -141,39 +143,33 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 
 		std::tuple<RoutedBlockHeader*, SIZE_T, SIZE_T> bestBlock = { nullptr, 0, 0 };
 
-		if (algoSpecificData.freeStackTop > 0) {
-			int arrIndex = algoSpecificData.freeStackTop -1;
-			do {
-				SIZE_T addrIndex = arrIndex * 2;
-				SIZE_T capacity = algoSpecificData.mFreeStackBase[addrIndex + 1];
-				SIZE_T capacityAfterHeader = capacity - sizeof(RoutedBlockHeader);
-				if (capacityAfterHeader < requiredSize) {
-					arrIndex -= 1;
-					continue;
-				}
-				uintptr_t rawAddress = algoSpecificData.mFreeStackBase[addrIndex];
-				RoutedBlockHeader* currentBlock = reinterpret_cast<RoutedBlockHeader*>(rawAddress);
-				uintptr_t addrSlot = rawAddress + sizeof(SIZE_T);
-				uintptr_t aligned = Align(addrSlot, alignof(DataType));
-				SIZE_T offset = static_cast<SIZE_T>(aligned - rawAddress);
-				SIZE_T usedSize = Align(offset + requiredSize, alignof(RoutedBlockHeader));
-				if (usedSize > currentBlock->size) {
-					arrIndex -= 1;
-					continue;
-				}
+		for (SIZE_T arrIndex = mAlgoSpecificData.freeStackTop; arrIndex-- > 0; ) {
+			SIZE_T addrIndex = arrIndex * 2;
+			SIZE_T capacity = mAlgoSpecificData.mFreeStackBase[addrIndex + 1];
 
-				SIZE_T sizeExceed = currentBlock->size - usedSize;
-				if (std::get<0>(bestBlock) == nullptr || sizeExceed < std::get<1>(bestBlock)) {
-					bestBlock = { currentBlock, sizeExceed, offset };
-					if (sizeExceed == 0)
-						break;
-				}
+			if (capacity < sizeof(RoutedBlockHeader) + requiredSize)
+				continue;
 
-				arrIndex -= 1;
-			} while (arrIndex >= 0);
+			RoutedBlockHeader* currentBlock = reinterpret_cast<RoutedBlockHeader*>(mAlgoSpecificData.mFreeStackBase[addrIndex]);
+			uintptr_t rawAddress = reinterpret_cast<uintptr_t>(currentBlock + 1);
+			uintptr_t addrSlot = rawAddress + sizeof(SIZE_T);
+			uintptr_t aligned = Align(addrSlot, alignof(DataType));
+			SIZE_T offset = static_cast<SIZE_T>(aligned - rawAddress);
+			SIZE_T usedSize = Align(offset + requiredSize, alignof(RoutedBlockHeader));
+
+			if (usedSize > currentBlock->size)
+				continue;
+
+			SIZE_T sizeExceed = currentBlock->size - usedSize;
+			if (std::get<0>(bestBlock) == nullptr || sizeExceed < std::get<1>(bestBlock)) {
+				bestBlock = { currentBlock, sizeExceed, offset };
+				if (sizeExceed == 0)
+					break;
+			}
 		}
 
 		if (std::get<0>(bestBlock)) {
+			RemoveFreeEntry(std::get<0>(bestBlock));
 			SIZE_T originalSize = std::get<0>(bestBlock)->size;
 			SIZE_T usedSize = Align(std::get<2>(bestBlock) + requiredSize, alignof(RoutedBlockHeader));
 
@@ -186,13 +182,14 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 					RoutedBlockHeader* newBlock = reinterpret_cast<RoutedBlockHeader*>(newBlockArea);
 					newBlock->free = true;
 					newBlock->size = remaining - sizeof(RoutedBlockHeader);
-					newBlock->next = std::get<0>(bestBlock)->next;
+					newBlock->next = oldNext;
 					if constexpr (CoalesceAlgo == CoalesceAlgorithm::LinkPrevious) {
 						newBlock->prev = std::get<0>(bestBlock);
 						if (oldNext)
 							oldNext->prev = newBlock;
 					}
 					std::get<0>(bestBlock)->next = newBlock;
+					PushFreeEntry(newBlock);
 				}
 			}
 
@@ -204,35 +201,35 @@ DataType* Allocator<CoalesceAlgo>::Allocate(SIZE_T requiredSize)
 			RETURN_CONSTRUCTED_MEMORY(DataType, reinterpret_cast<void*>(aligned));
 		}
 
-		UINT8* newBlockArea = reinterpret_cast<UINT8*>(previousBlock + 1) + previousBlock->size;
-		RoutedBlockHeader* newBlock = reinterpret_cast<RoutedBlockHeader*>(newBlockArea);
-		uintptr_t rawAddress = reinterpret_cast<uintptr_t>(newBlock + 1);
-		uintptr_t ptrNewBlockArOffset = rawAddress + sizeof(SIZE_T);
-		UINT8* alignedNewBlockArea = reinterpret_cast<UINT8*>(
-			Align(ptrNewBlockArOffset, alignof(DataType))
-			);
+		RoutedBlockHeader* previousBlock = mHeadMemBlock;
+		while (previousBlock->next)
+			previousBlock = previousBlock->next;
+
 		UINT8* arenaEnd = reinterpret_cast<UINT8*>(mBase) + mArenaCapacity;
-		if (alignedNewBlockArea + requiredSize <= arenaEnd) {
-			newBlock->free = false;
-			newBlock->next = nullptr;
+		UINT8* newBlockArea = reinterpret_cast<UINT8*>(previousBlock + 1) + previousBlock->size;
 
-			SIZE_T offset = static_cast<SIZE_T>(
-				reinterpret_cast<uintptr_t>(alignedNewBlockArea) -
-				rawAddress
-				);
-			newBlock->size = requiredSize + offset;
+		if (newBlockArea + sizeof(RoutedBlockHeader) <= arenaEnd) {
+			RoutedBlockHeader* newBlock = reinterpret_cast<RoutedBlockHeader*>(newBlockArea);
+			uintptr_t rawAddress = reinterpret_cast<uintptr_t>(newBlock + 1);
+			uintptr_t aligned = Align(rawAddress + sizeof(SIZE_T), alignof(DataType));
+			SIZE_T offset = static_cast<SIZE_T>(aligned - rawAddress);
+			SIZE_T blockSize = Align(offset + requiredSize, alignof(RoutedBlockHeader));
 
-			if constexpr (CoalesceAlgo == CoalesceAlgorithm::LinkPrevious)
-				newBlock->prev = previousBlock;
+			if (rawAddress + blockSize <= reinterpret_cast<uintptr_t>(arenaEnd)) {
+				newBlock->free = false;
+				newBlock->next = nullptr;
+				newBlock->size = blockSize;
 
-			previousBlock->next = newBlock;
-			SIZE_T* slot = reinterpret_cast<SIZE_T*>(alignedNewBlockArea - sizeof(SIZE_T));
-			*slot = offset;
+				if constexpr (CoalesceAlgo == CoalesceAlgorithm::LinkPrevious)
+					newBlock->prev = previousBlock;
 
-			RETURN_CONSTRUCTED_MEMORY(DataType, alignedNewBlockArea);
+				previousBlock->next = newBlock;
+				*reinterpret_cast<SIZE_T*>(aligned - sizeof(SIZE_T)) = offset;
+
+				RETURN_CONSTRUCTED_MEMORY(DataType, reinterpret_cast<void*>(aligned));
+			}
 		}
 	}
-
 	throw std::runtime_error(
 		BUILD_RUNTIME_ERR_MSG("Cannot Allocate A Free Block Or Create New One In This Arena!\nOut Of Memory In Arena")
 	);
