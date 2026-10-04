@@ -93,15 +93,19 @@ void Allocator<CoalesceAlgo>::Deallocate(void* memory)
 			prev = block->prev;
 		}
 		else {
-			RoutedBlockHeader* iPrev = nullptr;
-			RoutedBlockHeader* current = mHeadMemBlock;
-			while (current) {
-				if (current == block) {
-					prev = iPrev;
+			uintptr_t rawBlockAddr = 0;
+			uintptr_t usrBlockAddr = 0;
+			SIZE_T rawBlockSize = 0;
+			SIZE_T arrIndex = 0;
+			for (SIZE_T i = mAlgoSpecificData.freeStackTop; i > 0; i--) {
+				arrIndex = i - 1;
+				rawBlockAddr = mAlgoSpecificData.mFreeStackBase[arrIndex * 2];
+				rawBlockSize = mAlgoSpecificData.mFreeStackBase[(arrIndex * 2) + 1];
+				usrBlockAddr = rawBlockAddr + rawBlockSize;
+				if (usrBlockAddr == reinterpret_cast<uintptr_t>(block)) {
+					prev = reinterpret_cast<RoutedBlockHeader*>(rawBlockAddr);
 					break;
 				}
-				iPrev = current;
-				current = current->next;
 			}
 		}
 
@@ -234,5 +238,5 @@ void Allocator<CoalesceAlgo>::RemoveFreeEntry(RoutedBlockHeader* b) {
 //}
 
 template class Allocator<CoalesceAlgorithm::LinkPrevious>;
-template class Allocator<CoalesceAlgorithm::SearchFromHead>;
+template class Allocator<CoalesceAlgorithm::SearchPrevious>;
 template class Allocator<CoalesceAlgorithm::FixedSize_NoHeader>;

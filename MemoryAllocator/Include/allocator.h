@@ -19,13 +19,13 @@ namespace StandardMemoryUnits {
 }
 
 // Link Prev adds additional 8 bytes to memory block header (which becomes 24 + 8 = 32 bytes)
-// Search From Head searches linearly from head list to prev list so O(n)
-// Link Prev takes less time while Search from Head wastes less memory
+// in this it stores the previous mem block for operations
+// SearchPrevious searches linearly in free list array for prev mem block so O(n) 
 // Fixed size eliminates block header but you can only store same data type (or more
 // specifically data types of same size and alignment) in it.
 enum class CoalesceAlgorithm {
 	LinkPrevious,
-	SearchFromHead,
+	SearchPrevious,
 	FixedSize_NoHeader
 };
 
@@ -50,18 +50,11 @@ template<>
 struct BlockHeader<CoalesceAlgorithm::LinkPrevious> {
 	SIZE_T size;
 	bool free;
+	uint32_t freeIndex;
 	BlockHeader* next;
 	BlockHeader* prev;
 	//SIZE_T alignmentOffset;
-	uint32_t freeIndex;
 };
-
-
-/*
-note before signing off: when you place uint32_t freeIndex; at last of struct the speed dramatically increases
-by ~ 10 to 15 times and header increases by 8 bytes but if we place it in internal frag b/w bool free; and 
-BlockHeader* next; the struct size doesnt increase and speed decreases around ~ 10 to 15 times (back to base speed)
-*/
 
 template<CoalesceAlgorithm Algo>
 struct AlgoSpecificData {

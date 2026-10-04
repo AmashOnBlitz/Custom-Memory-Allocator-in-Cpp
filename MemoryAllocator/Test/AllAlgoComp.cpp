@@ -265,11 +265,11 @@ void RunAllAlgoComparisionBenchmark()
 	print("Running LinkPrevious (light/orderly)...");
 	BenchResult linkPrevLight = StressTest<CoalesceAlgorithm::LinkPrevious>(arenaSize, allocationCount, false);
 
-	print("Running SearchFromHead (heavy/chaotic)...");
-	BenchResult searchHeadHeavy = StressTest<CoalesceAlgorithm::SearchFromHead>(arenaSize, allocationCount, true);
+	print("Running SearchPrevious (heavy/chaotic)...");
+	BenchResult searchHeadHeavy = StressTest<CoalesceAlgorithm::SearchPrevious>(arenaSize, allocationCount, true);
 
-	print("Running SearchFromHead (light/orderly)...");
-	BenchResult searchHeadLight = StressTest<CoalesceAlgorithm::SearchFromHead>(arenaSize, allocationCount, false);
+	print("Running SearchPrevious (light/orderly)...");
+	BenchResult searchHeadLight = StressTest<CoalesceAlgorithm::SearchPrevious>(arenaSize, allocationCount, false);
 
 	print("Running FixedSize_NoHeader (heavy/chaotic)...");
 	BenchResult fixedHeavy = StressTest<CoalesceAlgorithm::FixedSize_NoHeader>(arenaSize, allocationCount, true);
@@ -287,48 +287,48 @@ void RunAllAlgoComparisionBenchmark()
 
 	print("Free() avg cost -- heavy/chaotic use:");
 	print("  LinkPrevious:       " << linkPrevHeavy.avgFreeNs << " ns");
-	print("  SearchFromHead:     " << searchHeadHeavy.avgFreeNs << " ns");
+	print("  SearchPrevious:     " << searchHeadHeavy.avgFreeNs << " ns");
 	print("  FixedSize_NoHeader: " << fixedHeavy.avgFreeNs << " ns");
 	print("  CPP_Default:        " << cppDefaultHeavy.avgFreeNs << " ns");
 
 	print("\nFree() avg cost -- light/orderly use:");
 	print("  LinkPrevious:       " << linkPrevLight.avgFreeNs << " ns");
-	print("  SearchFromHead:     " << searchHeadLight.avgFreeNs << " ns");
+	print("  SearchPrevious:     " << searchHeadLight.avgFreeNs << " ns");
 	print("  FixedSize_NoHeader: " << fixedLight.avgFreeNs << " ns");
 	print("  CPP_Default:        " << cppDefaultLight.avgFreeNs << " ns");
 
 	print("\nFree() worst-case spike -- heavy use:");
 	print("  LinkPrevious:       " << linkPrevHeavy.worstFreeUs << " us");
-	print("  SearchFromHead:     " << searchHeadHeavy.worstFreeUs << " us");
+	print("  SearchPrevious:     " << searchHeadHeavy.worstFreeUs << " us");
 	print("  FixedSize_NoHeader: " << fixedHeavy.worstFreeUs << " us");
 	print("  CPP_Default:        " << cppDefaultHeavy.worstFreeUs << " us");
 
 	print("\nAllocate() avg cost:");
 	print("  LinkPrevious   heavy: " << linkPrevHeavy.avgAllocNs << " ns, light: " << linkPrevLight.avgAllocNs << " ns");
-	print("  SearchFromHead heavy: " << searchHeadHeavy.avgAllocNs << " ns, light: " << searchHeadLight.avgAllocNs << " ns");
+	print("  SearchPrevious heavy: " << searchHeadHeavy.avgAllocNs << " ns, light: " << searchHeadLight.avgAllocNs << " ns");
 	print("  FixedSize      heavy: " << fixedHeavy.avgAllocNs << " ns, light: " << fixedLight.avgAllocNs << " ns");
 	print("  CPP_Default    heavy: " << cppDefaultHeavy.avgAllocNs << " ns, light: " << cppDefaultLight.avgAllocNs << " ns");
 
 	print("\nTotal run time -- heavy/chaotic use:");
 	print("  LinkPrevious:       " << linkPrevHeavy.totalRunMs << " ms");
-	print("  SearchFromHead:     " << searchHeadHeavy.totalRunMs << " ms");
+	print("  SearchPrevious:     " << searchHeadHeavy.totalRunMs << " ms");
 	print("  FixedSize_NoHeader: " << fixedHeavy.totalRunMs << " ms");
 	print("  CPP_Default:        " << cppDefaultHeavy.totalRunMs << " ms");
 
 	print("\nTotal run time -- light/orderly use:");
 	print("  LinkPrevious:       " << linkPrevLight.totalRunMs << " ms");
-	print("  SearchFromHead:     " << searchHeadLight.totalRunMs << " ms");
+	print("  SearchPrevious:     " << searchHeadLight.totalRunMs << " ms");
 	print("  FixedSize_NoHeader: " << fixedLight.totalRunMs << " ms");
 	print("  CPP_Default:        " << cppDefaultLight.totalRunMs << " ms");
 
 	print("\nMemory overhead per block:");
 	print("  LinkPrevious:       " << sizeof(BlockHeader<CoalesceAlgorithm::LinkPrevious>) << " bytes");
-	print("  SearchFromHead:     " << sizeof(BlockHeader<CoalesceAlgorithm::SearchFromHead>) << " bytes");
+	print("  SearchPrevious:     " << sizeof(BlockHeader<CoalesceAlgorithm::SearchPrevious>) << " bytes");
 	print("  FixedSize_NoHeader: 1 bit");
 
 	print("\nTotal header memory tax -- heavy use (" << allocationCount << " allocations):");
 	print("  LinkPrevious:   " << (sizeof(BlockHeader<CoalesceAlgorithm::LinkPrevious>) * allocationCount) / (double)StandardMemoryUnits::MB << " MB");
-	print("  SearchFromHead: " << (sizeof(BlockHeader<CoalesceAlgorithm::SearchFromHead>) * allocationCount) / (double)StandardMemoryUnits::MB << " MB");
+	print("  SearchPrevious: " << (sizeof(BlockHeader<CoalesceAlgorithm::SearchPrevious>) * allocationCount) / (double)StandardMemoryUnits::MB << " MB");
 	print("  FixedSize_NoHeader: " << ((1/8) * allocationCount) / (double)StandardMemoryUnits::MB << " MB");
 	print("\nNote: CPP_Default (malloc) header overhead is implementation-defined and not directly measurable, so it's excluded from the memory tax comparison above.");
 	print("When ENFORCE_ALLOCATOR_CHECKS flag is enabled FixedSize_NoHeader uses 1 bit of memory per alloc in external bitmap metadata, not in memory header");
@@ -349,11 +349,11 @@ void RunMixedTypeComparisionBenchmark()
 	print("Running LinkPrevious (light/orderly)...");
 	MixedResult linkPrevLight = MixedStressTest<CoalesceAlgorithm::LinkPrevious>(arenaSize, allocationCount, false);
 
-	print("Running SearchFromHead (heavy/chaotic)...");
-	MixedResult searchHeadHeavy = MixedStressTest<CoalesceAlgorithm::SearchFromHead>(arenaSize, allocationCount, true);
+	print("Running SearchPrevious (heavy/chaotic)...");
+	MixedResult searchHeadHeavy = MixedStressTest<CoalesceAlgorithm::SearchPrevious>(arenaSize, allocationCount, true);
 
-	print("Running SearchFromHead (light/orderly)...");
-	MixedResult searchHeadLight = MixedStressTest<CoalesceAlgorithm::SearchFromHead>(arenaSize, allocationCount, false);
+	print("Running SearchPrevious (light/orderly)...");
+	MixedResult searchHeadLight = MixedStressTest<CoalesceAlgorithm::SearchPrevious>(arenaSize, allocationCount, false);
 
 	print("Running CPP_Default -- malloc/free (heavy/chaotic)...");
 	MixedResult cppDefaultHeavy = MixedStressTestCppDefault(allocationCount, true);
@@ -365,12 +365,12 @@ void RunMixedTypeComparisionBenchmark()
 
 	print("Heavy/chaotic use ------------------------\n");
 	PrintMixedResult("LinkPrevious:", linkPrevHeavy);
-	PrintMixedResult("SearchFromHead:", searchHeadHeavy);
+	PrintMixedResult("SearchPrevious:", searchHeadHeavy);
 	PrintMixedResult("CPP_Default:", cppDefaultHeavy);
 
 	print("Light/orderly use ------------------------\n");
 	PrintMixedResult("LinkPrevious:", linkPrevLight);
-	PrintMixedResult("SearchFromHead:", searchHeadLight);
+	PrintMixedResult("SearchPrevious:", searchHeadLight);
 	PrintMixedResult("CPP_Default:", cppDefaultLight);
 
 	print("===========================================");
