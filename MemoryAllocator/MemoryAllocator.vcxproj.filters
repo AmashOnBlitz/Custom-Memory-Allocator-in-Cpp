@@ -15,16 +15,13 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Test\main.cpp">
+    <ClCompile Include="Tests\main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Src\allocator.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Src\TemplateAllocate.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Test\AllAlgoComp.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Src\Platform\Unix.cpp">
@@ -38,14 +35,8 @@
     <ClInclude Include="Include\allocator.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Test\AllAlgoComp.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="Include\Platform.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="Test\comparisionReport.md" />
   </ItemGroup>
 </Project>

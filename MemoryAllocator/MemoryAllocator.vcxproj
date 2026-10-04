@@ -148,16 +148,11 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="Test\AllAlgoComp.cpp" />
-    <ClCompile Include="Test\main.cpp" />
+    <ClCompile Include="Tests\main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Include\allocator.h" />
     <ClInclude Include="Include\Platform.h" />
-    <ClInclude Include="Test\AllAlgoComp.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="Test\comparisionReport.md" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
